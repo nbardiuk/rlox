@@ -20,10 +20,23 @@ fn main() -> io::Result<()> {
 fn scan_tokens(source: &str) -> Vec<Token> {
     vec![]
 }
+struct Token {
+    typ: TokenType,
+    lexeme: String,
+    literal: String, //TODO in example this is a Java Object
+    line: usize,
+}
+
+impl std::fmt::Display for Token {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+        f.write_fmt(format_args!(
+            "{:?} {} {}",
+            self.typ, self.lexeme, self.literal
+        ))
+    }
+}
 
 #[derive(Debug)]
-struct Token {}
-
 enum TokenType {
     LEFT_PAREN,
     RIGHT_PAREN,
@@ -78,7 +91,7 @@ impl Lox {
     fn run(&self, source: &str) {
         let tokens = scan_tokens(source);
         for token in tokens {
-            println!("{:?}", token);
+            println!("{}", token);
         }
     }
     fn run_file(&self, path: &str) -> io::Result<()> {
