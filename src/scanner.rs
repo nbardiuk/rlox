@@ -1,3 +1,5 @@
+use crate::lox::Lox;
+
 pub struct Scanner<'a> {
     source: &'a str,
     tokens: Vec<Token<'a>>,
@@ -17,17 +19,17 @@ impl<'a> Scanner<'a> {
         }
     }
 
-    pub fn scan_tokens(&mut self) -> Vec<Token> {
+    pub fn scan_tokens(&mut self, lox: &mut Lox) -> Vec<Token> {
         while !self.is_at_end() {
             // we are at the beginning of the next lexeme.
             self.start = self.current;
-            self.scan_token();
+            self.scan_token(lox);
         }
         self.tokens.push(Token::new(EOF, "", None, self.line));
         self.tokens.clone()
     }
 
-    fn scan_token(&mut self) {
+    fn scan_token(&mut self, lox: &mut Lox) {
         let c = self.advance();
         match c {
             Some('(') => self.add_token(LeftParen),
@@ -40,7 +42,7 @@ impl<'a> Scanner<'a> {
             Some('+') => self.add_token(Plus),
             Some(';') => self.add_token(Semicolon),
             Some('*') => self.add_token(Star),
-            _ => {}
+            _ => lox.error(self.line, "Unexpected character."),
         }
     }
 

@@ -14,15 +14,15 @@ impl Lox {
         Self { has_error: false }
     }
 
-    fn run(&self, source: &str) {
+    fn run(&mut self, source: &str) {
         let mut scanner = Scanner::new(source);
-        let tokens = scanner.scan_tokens();
+        let tokens = scanner.scan_tokens(self);
         for token in tokens {
             println!("{}", token);
         }
     }
 
-    pub fn run_file(&self, path: &str) -> io::Result<()> {
+    pub fn run_file(&mut self, path: &str) -> io::Result<()> {
         self.run(&fs::read_to_string(path)?);
         if self.has_error {
             process::exit(65)
@@ -43,7 +43,7 @@ impl Lox {
         }
     }
 
-    fn error(&mut self, line: usize, message: &str) {
+    pub fn error(&mut self, line: usize, message: &str) {
         self.report(line, "", message);
     }
 
