@@ -3,7 +3,7 @@ use std::io;
 use std::io::Write;
 use std::process;
 
-use crate::scanner::scan_tokens;
+use crate::scanner::Scanner;
 
 pub struct Lox {
     has_error: bool,
@@ -15,7 +15,8 @@ impl Lox {
     }
 
     fn run(&self, source: &str) {
-        let tokens = scan_tokens(source);
+        let mut scanner = Scanner::new(source);
+        let tokens = scanner.scan_tokens();
         for token in tokens {
             println!("{}", token);
         }
