@@ -42,7 +42,36 @@ impl<'a> Scanner<'a> {
             Some('+') => self.add_token(Plus),
             Some(';') => self.add_token(Semicolon),
             Some('*') => self.add_token(Star),
+            Some('!') => {
+                let token = if self.matches('=') { BangEqual } else { Bang };
+                self.add_token(token)
+            }
+            Some('=') => {
+                let token = if self.matches('=') { EqualEqual } else { Equal };
+                self.add_token(token)
+            }
+            Some('<') => {
+                let token = if self.matches('=') { LessEqual } else { Less };
+                self.add_token(token)
+            }
+            Some('>') => {
+                let token = if self.matches('=') {
+                    GreaterEqual
+                } else {
+                    Greater
+                };
+                self.add_token(token)
+            }
             _ => lox.error(self.line, "Unexpected character."),
+        }
+    }
+
+    fn matches(&mut self, expected: char) -> bool {
+        if self.is_at_end() || self.source.chars().nth(self.current) != Some(expected) {
+            false
+        } else {
+            self.current += 1;
+            true
         }
     }
 
