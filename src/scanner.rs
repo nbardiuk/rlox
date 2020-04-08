@@ -1,4 +1,5 @@
 use crate::lox::Lox;
+use std::io::Write;
 
 pub struct Scanner<'a> {
     source: &'a str,
@@ -19,7 +20,7 @@ impl<'a> Scanner<'a> {
         }
     }
 
-    pub fn scan_tokens(&mut self, lox: &mut Lox) -> Vec<Token> {
+    pub fn scan_tokens<W: Write>(&mut self, lox: &mut Lox<W>) -> Vec<Token> {
         while !self.is_at_end() {
             // we are at the beginning of the next lexeme.
             self.start = self.current;
@@ -29,7 +30,7 @@ impl<'a> Scanner<'a> {
         self.tokens.clone()
     }
 
-    fn scan_token(&mut self, lox: &mut Lox) {
+    fn scan_token<W: Write>(&mut self, lox: &mut Lox<W>) {
         let c = self.advance();
         match c {
             Some('(') => self.add_token(LeftParen),
@@ -62,12 +63,27 @@ impl<'a> Scanner<'a> {
                 };
                 self.add_token(token)
             }
+            Some('/') => {
+                if self.matches('/') {
+                    while self.peek() != Some('\n') && !self.is_at_end() {
+                        self.advance();
+                    }
+                } else {
+                    self.add_token(Slash)
+                };
+            }
+            Some(' ') | Some('\r') | Some('\t') => {}
+            Some('\n') => self.line += 1,
             _ => lox.error(self.line, "Unexpected character."),
         }
     }
 
+    fn peek(&self) -> Option<char> {
+        self.source.chars().nth(self.current)
+    }
+
     fn matches(&mut self, expected: char) -> bool {
-        if self.is_at_end() || self.source.chars().nth(self.current) != Some(expected) {
+        if self.peek() != Some(expected) {
             false
         } else {
             self.current += 1;
@@ -90,7 +106,7 @@ impl<'a> Scanner<'a> {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Token<'a> {
     typ: TokenType,
     lexeme: &'a str,
@@ -120,7 +136,7 @@ impl<'a> std::fmt::Display for Token<'a> {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 enum TokenType {
     LeftParen,
     RightParen,
@@ -144,7 +160,7 @@ enum TokenType {
     LessEqual,
 
     Identifier,
-    String,
+    String_,
     Number,
 
     And,
@@ -167,3 +183,115 @@ enum TokenType {
     EOF,
 }
 use TokenType::*;
+
+#[cfg(test)]
+mod spec {
+    use super::*;
+
+    fn assert_tokens<'a>(source: &'a str, expected: Vec<Token<'a>>) {
+        let mut lox = Lox::<Vec<u8>>::new();
+        assert_eq!(Scanner::new(source).scan_tokens(&mut lox), expected);
+        assert_eq!(lox.output(), "");
+        assert!(!lox.has_error, "no scanning erros");
+    }
+
+    fn assert_tokens_error<'a>(source: &'a str, errors: &'a str, expected: Vec<Token<'a>>) {
+        let mut lox = Lox::<Vec<u8>>::new();
+        assert_eq!(Scanner::new(source).scan_tokens(&mut lox), expected);
+        assert!(lox.has_error, "has scanning erros");
+        assert_eq!(lox.output(), errors);
+    }
+
+    #[test]
+    fn empty_source() {
+        assert_tokens("", vec![Token::new(EOF, "", None, 1)]);
+    }
+
+    #[test]
+    fn single_character_tokens() {
+        assert_tokens(
+            "(){},.-+;/*",
+            vec![
+                Token::new(LeftParen, "(", None, 1),
+                Token::new(RightParen, ")", None, 1),
+                Token::new(LeftBrace, "{", None, 1),
+                Token::new(RightBrace, "}", None, 1),
+                Token::new(Comma, ",", None, 1),
+                Token::new(Dot, ".", None, 1),
+                Token::new(Minus, "-", None, 1),
+                Token::new(Plus, "+", None, 1),
+                Token::new(Semicolon, ";", None, 1),
+                Token::new(Slash, "/", None, 1),
+                Token::new(Star, "*", None, 1),
+                Token::new(EOF, "", None, 1),
+            ],
+        );
+    }
+
+    #[test]
+    fn one_or_two_characters_tokens() {
+        assert_tokens(
+            "!!====>=><=<",
+            vec![
+                Token::new(Bang, "!", None, 1),
+                Token::new(BangEqual, "!=", None, 1),
+                Token::new(EqualEqual, "==", None, 1),
+                Token::new(Equal, "=", None, 1),
+                Token::new(GreaterEqual, ">=", None, 1),
+                Token::new(Greater, ">", None, 1),
+                Token::new(LessEqual, "<=", None, 1),
+                Token::new(Less, "<", None, 1),
+                Token::new(EOF, "", None, 1),
+            ],
+        );
+    }
+
+    #[test]
+    fn line_comment() {
+        assert_tokens("//anything goes here", vec![Token::new(EOF, "", None, 1)]);
+        assert_tokens(
+            "-// comment body",
+            vec![
+                Token::new(Minus, "-", None, 1),
+                Token::new(EOF, "", None, 1),
+            ],
+        );
+        assert_tokens(
+            "-// comment until new line \n+",
+            vec![
+                Token::new(Minus, "-", None, 1),
+                Token::new(Plus, "+", None, 2),
+                Token::new(EOF, "", None, 2),
+            ],
+        );
+    }
+
+    #[test]
+    fn ignore_white_space() {
+        assert_tokens("   \r  \t   ", vec![Token::new(EOF, "", None, 1)]);
+        assert_tokens(
+            "  \t  \n -  \n",
+            vec![
+                Token::new(Minus, "-", None, 2),
+                Token::new(EOF, "", None, 3),
+            ],
+        );
+    }
+
+    #[test]
+    fn unexpected_tokens() {
+        assert_tokens_error(
+            "@-#\n^+",
+            "\
+[line 1] Error: Unexpected character.
+[line 1] Error: Unexpected character.
+[line 2] Error: Unexpected character.
+",
+            vec![
+                Token::new(Minus, "-", None, 1),
+                Token::new(Plus, "+", None, 2),
+                Token::new(EOF, "", None, 2),
+            ],
+        );
+    }
+}
