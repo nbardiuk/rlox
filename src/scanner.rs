@@ -74,8 +74,28 @@ impl<'a> Scanner<'a> {
             }
             Some(' ') | Some('\r') | Some('\t') => {}
             Some('\n') => self.line += 1,
+            Some('"') => self.string(lox),
             _ => lox.error(self.line, "Unexpected character."),
         }
+    }
+
+    fn string<W: Write>(&mut self, lox: &mut Lox<W>) {
+        while self.peek() != Some('"') && !self.is_at_end() {
+            if self.peek() == Some('\n') {
+                self.line += 1;
+            }
+            self.advance();
+        }
+
+        if self.is_at_end() {
+            lox.error(self.line, "Unterminated string.");
+            return;
+        }
+
+        self.advance();
+
+        let text = &self.source[self.start + 1..self.current - 1];
+        self.add_literal_token(String, text)
     }
 
     fn peek(&self) -> Option<char> {
@@ -94,6 +114,12 @@ impl<'a> Scanner<'a> {
     fn advance(&mut self) -> Option<char> {
         self.current += 1;
         self.source.chars().nth(self.current - 1)
+    }
+
+    fn add_literal_token(&mut self, typ: TokenType, literal: &'a str) {
+        let text = &self.source[self.start..self.current];
+        self.tokens
+            .push(Token::new(typ, text, Some(literal), self.line))
     }
 
     fn add_token(&mut self, typ: TokenType) {
@@ -160,7 +186,7 @@ enum TokenType {
     LessEqual,
 
     Identifier,
-    String_,
+    String,
     Number,
 
     And,
@@ -291,6 +317,51 @@ mod spec {
                 Token::new(Minus, "-", None, 1),
                 Token::new(Plus, "+", None, 2),
                 Token::new(EOF, "", None, 2),
+            ],
+        );
+    }
+
+    #[test]
+    fn string_literal() {
+        assert_tokens_error(
+            "\"unterminated",
+            "\
+[line 1] Error: Unterminated string.
+",
+            vec![Token::new(EOF, "", None, 1)],
+        );
+
+        assert_tokens(
+            "+\"string literal\"*",
+            vec![
+                Token::new(Plus, "+", None, 1),
+                Token::new(String, "\"string literal\"", Some("string literal"), 1),
+                Token::new(Star, "*", None, 1),
+                Token::new(EOF, "", None, 1),
+            ],
+        );
+
+        assert_tokens(
+            "\"any #@^&\"",
+            vec![
+                Token::new(String, "\"any #@^&\"", Some("any #@^&"), 1),
+                Token::new(EOF, "", None, 1),
+            ],
+        );
+
+        assert_tokens(
+            "\"\
+multiline
+string
+\"",
+            vec![
+                Token::new(
+                    String,
+                    "\"multiline\nstring\n\"",
+                    Some("multiline\nstring\n"),
+                    3,
+                ),
+                Token::new(EOF, "", None, 3),
             ],
         );
     }
