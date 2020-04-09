@@ -1,5 +1,9 @@
 use crate::lox::Lox;
+use std::fmt::Display;
+use std::fmt::Error;
+use std::fmt::Formatter;
 use std::io::Write;
+use std::result::Result;
 
 pub struct Scanner<'a> {
     source: &'a str,
@@ -58,7 +62,8 @@ impl<'a> Scanner<'a> {
             self.start = self.current;
             self.scan_token(lox);
         }
-        self.tokens.push(Token::new(EOF, "", None, self.line));
+        self.tokens
+            .push(Token::new(EOF, "", Literal::Nil, self.line));
         self.tokens.clone()
     }
 
@@ -188,13 +193,13 @@ impl<'a> Scanner<'a> {
 
     fn add_literal_token(&mut self, typ: TokenType, literal: Literal<'a>) {
         let text = &self.source[self.start..self.current];
-        self.tokens
-            .push(Token::new(typ, text, Some(literal), self.line))
+        self.tokens.push(Token::new(typ, text, literal, self.line))
     }
 
     fn add_token(&mut self, typ: TokenType) {
         let text = &self.source[self.start..self.current];
-        self.tokens.push(Token::new(typ, text, None, self.line))
+        self.tokens
+            .push(Token::new(typ, text, Literal::Nil, self.line))
     }
 
     fn is_at_end(&self) -> bool {
@@ -206,18 +211,30 @@ impl<'a> Scanner<'a> {
 pub enum Literal<'a> {
     String(&'a str),
     Number(f64),
+    Nil,
+}
+
+impl<'a> Display for Literal<'a> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
+        use Literal::*;
+        match self {
+            String(s) => write!(f, "\"{}\"", s),
+            Number(n) => write!(f, "{}", n),
+            Nil => write!(f, "nil"),
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Token<'a> {
     typ: TokenType,
-    lexeme: &'a str,
-    literal: Option<Literal<'a>>,
+    pub lexeme: &'a str,
+    literal: Literal<'a>,
     line: usize,
 }
 
 impl<'a> Token<'a> {
-    fn new(typ: TokenType, lexeme: &'a str, literal: Option<Literal<'a>>, line: usize) -> Self {
+    pub fn new(typ: TokenType, lexeme: &'a str, literal: Literal<'a>, line: usize) -> Self {
         Self {
             typ,
             lexeme,
@@ -227,19 +244,14 @@ impl<'a> Token<'a> {
     }
 }
 
-impl<'a> std::fmt::Display for Token<'a> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
-        f.write_fmt(format_args!(
-            "{:?} {} {:?}",
-            self.typ,
-            self.lexeme,
-            self.literal.as_ref().unwrap_or(&Literal::String(""))
-        ))
+impl<'a> Display for Token<'a> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
+        write!(f, "{:?} {} {}", self.typ, self.lexeme, self.literal)
     }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-enum TokenType {
+pub enum TokenType {
     LeftParen,
     RightParen,
     LeftBrace,
@@ -306,7 +318,7 @@ mod spec {
 
     #[test]
     fn empty_source() {
-        assert_tokens("", vec![Token::new(EOF, "", None, 1)]);
+        assert_tokens("", vec![Token::new(EOF, "", Literal::Nil, 1)]);
     }
 
     #[test]
@@ -314,18 +326,18 @@ mod spec {
         assert_tokens(
             "(){},.-+;/*",
             vec![
-                Token::new(LeftParen, "(", None, 1),
-                Token::new(RightParen, ")", None, 1),
-                Token::new(LeftBrace, "{", None, 1),
-                Token::new(RightBrace, "}", None, 1),
-                Token::new(Comma, ",", None, 1),
-                Token::new(Dot, ".", None, 1),
-                Token::new(Minus, "-", None, 1),
-                Token::new(Plus, "+", None, 1),
-                Token::new(Semicolon, ";", None, 1),
-                Token::new(Slash, "/", None, 1),
-                Token::new(Star, "*", None, 1),
-                Token::new(EOF, "", None, 1),
+                Token::new(LeftParen, "(", Literal::Nil, 1),
+                Token::new(RightParen, ")", Literal::Nil, 1),
+                Token::new(LeftBrace, "{", Literal::Nil, 1),
+                Token::new(RightBrace, "}", Literal::Nil, 1),
+                Token::new(Comma, ",", Literal::Nil, 1),
+                Token::new(Dot, ".", Literal::Nil, 1),
+                Token::new(Minus, "-", Literal::Nil, 1),
+                Token::new(Plus, "+", Literal::Nil, 1),
+                Token::new(Semicolon, ";", Literal::Nil, 1),
+                Token::new(Slash, "/", Literal::Nil, 1),
+                Token::new(Star, "*", Literal::Nil, 1),
+                Token::new(EOF, "", Literal::Nil, 1),
             ],
         );
     }
@@ -335,47 +347,50 @@ mod spec {
         assert_tokens(
             "!!====>=><=<",
             vec![
-                Token::new(Bang, "!", None, 1),
-                Token::new(BangEqual, "!=", None, 1),
-                Token::new(EqualEqual, "==", None, 1),
-                Token::new(Equal, "=", None, 1),
-                Token::new(GreaterEqual, ">=", None, 1),
-                Token::new(Greater, ">", None, 1),
-                Token::new(LessEqual, "<=", None, 1),
-                Token::new(Less, "<", None, 1),
-                Token::new(EOF, "", None, 1),
+                Token::new(Bang, "!", Literal::Nil, 1),
+                Token::new(BangEqual, "!=", Literal::Nil, 1),
+                Token::new(EqualEqual, "==", Literal::Nil, 1),
+                Token::new(Equal, "=", Literal::Nil, 1),
+                Token::new(GreaterEqual, ">=", Literal::Nil, 1),
+                Token::new(Greater, ">", Literal::Nil, 1),
+                Token::new(LessEqual, "<=", Literal::Nil, 1),
+                Token::new(Less, "<", Literal::Nil, 1),
+                Token::new(EOF, "", Literal::Nil, 1),
             ],
         );
     }
 
     #[test]
     fn line_comment() {
-        assert_tokens("//anything goes here", vec![Token::new(EOF, "", None, 1)]);
+        assert_tokens(
+            "//anything goes here",
+            vec![Token::new(EOF, "", Literal::Nil, 1)],
+        );
         assert_tokens(
             "-// comment body",
             vec![
-                Token::new(Minus, "-", None, 1),
-                Token::new(EOF, "", None, 1),
+                Token::new(Minus, "-", Literal::Nil, 1),
+                Token::new(EOF, "", Literal::Nil, 1),
             ],
         );
         assert_tokens(
             "-// comment until new line \n+",
             vec![
-                Token::new(Minus, "-", None, 1),
-                Token::new(Plus, "+", None, 2),
-                Token::new(EOF, "", None, 2),
+                Token::new(Minus, "-", Literal::Nil, 1),
+                Token::new(Plus, "+", Literal::Nil, 2),
+                Token::new(EOF, "", Literal::Nil, 2),
             ],
         );
     }
 
     #[test]
     fn ignore_white_space() {
-        assert_tokens("   \r  \t   ", vec![Token::new(EOF, "", None, 1)]);
+        assert_tokens("   \r  \t   ", vec![Token::new(EOF, "", Literal::Nil, 1)]);
         assert_tokens(
             "  \t  \n -  \n",
             vec![
-                Token::new(Minus, "-", None, 2),
-                Token::new(EOF, "", None, 3),
+                Token::new(Minus, "-", Literal::Nil, 2),
+                Token::new(EOF, "", Literal::Nil, 3),
             ],
         );
     }
@@ -390,9 +405,9 @@ mod spec {
 [line 2] Error: Unexpected character.
 ",
             vec![
-                Token::new(Minus, "-", None, 1),
-                Token::new(Plus, "+", None, 2),
-                Token::new(EOF, "", None, 2),
+                Token::new(Minus, "-", Literal::Nil, 1),
+                Token::new(Plus, "+", Literal::Nil, 2),
+                Token::new(EOF, "", Literal::Nil, 2),
             ],
         );
     }
@@ -404,29 +419,29 @@ mod spec {
             "\
 [line 1] Error: Unterminated string.
 ",
-            vec![Token::new(EOF, "", None, 1)],
+            vec![Token::new(EOF, "", Literal::Nil, 1)],
         );
 
         assert_tokens(
             "+\"string literal\"*",
             vec![
-                Token::new(Plus, "+", None, 1),
+                Token::new(Plus, "+", Literal::Nil, 1),
                 Token::new(
                     String,
                     "\"string literal\"",
-                    Some(Literal::String("string literal")),
+                    Literal::String("string literal"),
                     1,
                 ),
-                Token::new(Star, "*", None, 1),
-                Token::new(EOF, "", None, 1),
+                Token::new(Star, "*", Literal::Nil, 1),
+                Token::new(EOF, "", Literal::Nil, 1),
             ],
         );
 
         assert_tokens(
             "\"any #@^&\"",
             vec![
-                Token::new(String, "\"any #@^&\"", Some(Literal::String("any #@^&")), 1),
-                Token::new(EOF, "", None, 1),
+                Token::new(String, "\"any #@^&\"", Literal::String("any #@^&"), 1),
+                Token::new(EOF, "", Literal::Nil, 1),
             ],
         );
 
@@ -439,10 +454,10 @@ string
                 Token::new(
                     String,
                     "\"multiline\nstring\n\"",
-                    Some(Literal::String("multiline\nstring\n")),
+                    Literal::String("multiline\nstring\n"),
                     3,
                 ),
-                Token::new(EOF, "", None, 3),
+                Token::new(EOF, "", Literal::Nil, 3),
             ],
         );
     }
@@ -452,31 +467,31 @@ string
         assert_tokens(
             "1234",
             vec![
-                Token::new(Number, "1234", Some(Literal::Number(1234.)), 1),
-                Token::new(EOF, "", None, 1),
+                Token::new(Number, "1234", Literal::Number(1234.), 1),
+                Token::new(EOF, "", Literal::Nil, 1),
             ],
         );
         assert_tokens(
             "23.45",
             vec![
-                Token::new(Number, "23.45", Some(Literal::Number(23.45)), 1),
-                Token::new(EOF, "", None, 1),
+                Token::new(Number, "23.45", Literal::Number(23.45), 1),
+                Token::new(EOF, "", Literal::Nil, 1),
             ],
         );
         assert_tokens(
             ".345",
             vec![
-                Token::new(Dot, ".", None, 1),
-                Token::new(Number, "345", Some(Literal::Number(345.)), 1),
-                Token::new(EOF, "", None, 1),
+                Token::new(Dot, ".", Literal::Nil, 1),
+                Token::new(Number, "345", Literal::Number(345.), 1),
+                Token::new(EOF, "", Literal::Nil, 1),
             ],
         );
         assert_tokens(
             "4567.",
             vec![
-                Token::new(Number, "4567", Some(Literal::Number(4567.)), 1),
-                Token::new(Dot, ".", None, 1),
-                Token::new(EOF, "", None, 1),
+                Token::new(Number, "4567", Literal::Number(4567.), 1),
+                Token::new(Dot, ".", Literal::Nil, 1),
+                Token::new(EOF, "", Literal::Nil, 1),
             ],
         );
     }
@@ -486,29 +501,29 @@ string
         assert_tokens(
             "ab_c",
             vec![
-                Token::new(Identifier, "ab_c", None, 1),
-                Token::new(EOF, "", None, 1),
+                Token::new(Identifier, "ab_c", Literal::Nil, 1),
+                Token::new(EOF, "", Literal::Nil, 1),
             ],
         );
         assert_tokens(
             "orand",
             vec![
-                Token::new(Identifier, "orand", None, 1),
-                Token::new(EOF, "", None, 1),
+                Token::new(Identifier, "orand", Literal::Nil, 1),
+                Token::new(EOF, "", Literal::Nil, 1),
             ],
         );
         assert_tokens(
             "__123",
             vec![
-                Token::new(Identifier, "__123", None, 1),
-                Token::new(EOF, "", None, 1),
+                Token::new(Identifier, "__123", Literal::Nil, 1),
+                Token::new(EOF, "", Literal::Nil, 1),
             ],
         );
         assert_tokens(
             "A123a",
             vec![
-                Token::new(Identifier, "A123a", None, 1),
-                Token::new(EOF, "", None, 1),
+                Token::new(Identifier, "A123a", Literal::Nil, 1),
+                Token::new(EOF, "", Literal::Nil, 1),
             ],
         );
     }
@@ -518,107 +533,113 @@ string
         assert_tokens(
             "and",
             vec![
-                Token::new(And, "and", None, 1),
-                Token::new(EOF, "", None, 1),
+                Token::new(And, "and", Literal::Nil, 1),
+                Token::new(EOF, "", Literal::Nil, 1),
             ],
         );
         assert_tokens(
             "class",
             vec![
-                Token::new(Class, "class", None, 1),
-                Token::new(EOF, "", None, 1),
+                Token::new(Class, "class", Literal::Nil, 1),
+                Token::new(EOF, "", Literal::Nil, 1),
             ],
         );
         assert_tokens(
             "else",
             vec![
-                Token::new(Else, "else", None, 1),
-                Token::new(EOF, "", None, 1),
+                Token::new(Else, "else", Literal::Nil, 1),
+                Token::new(EOF, "", Literal::Nil, 1),
             ],
         );
         assert_tokens(
             "false",
             vec![
-                Token::new(False, "false", None, 1),
-                Token::new(EOF, "", None, 1),
+                Token::new(False, "false", Literal::Nil, 1),
+                Token::new(EOF, "", Literal::Nil, 1),
             ],
         );
         assert_tokens(
             "for",
             vec![
-                Token::new(For, "for", None, 1),
-                Token::new(EOF, "", None, 1),
+                Token::new(For, "for", Literal::Nil, 1),
+                Token::new(EOF, "", Literal::Nil, 1),
             ],
         );
         assert_tokens(
             "fun",
             vec![
-                Token::new(Fun, "fun", None, 1),
-                Token::new(EOF, "", None, 1),
+                Token::new(Fun, "fun", Literal::Nil, 1),
+                Token::new(EOF, "", Literal::Nil, 1),
             ],
         );
         assert_tokens(
             "if",
-            vec![Token::new(If, "if", None, 1), Token::new(EOF, "", None, 1)],
+            vec![
+                Token::new(If, "if", Literal::Nil, 1),
+                Token::new(EOF, "", Literal::Nil, 1),
+            ],
         );
         assert_tokens(
             "nil",
             vec![
-                Token::new(Nil, "nil", None, 1),
-                Token::new(EOF, "", None, 1),
+                Token::new(Nil, "nil", Literal::Nil, 1),
+                Token::new(EOF, "", Literal::Nil, 1),
             ],
         );
         assert_tokens(
             "or",
-            vec![Token::new(Or, "or", None, 1), Token::new(EOF, "", None, 1)],
+            vec![
+                Token::new(Or, "or", Literal::Nil, 1),
+                Token::new(EOF, "", Literal::Nil, 1),
+            ],
         );
         assert_tokens(
             "print",
             vec![
-                Token::new(Print, "print", None, 1),
-                Token::new(EOF, "", None, 1),
+                Token::new(Print, "print", Literal::Nil, 1),
+                Token::new(EOF, "", Literal::Nil, 1),
             ],
         );
         assert_tokens(
             "return",
             vec![
-                Token::new(Return, "return", None, 1),
-                Token::new(EOF, "", None, 1),
+                Token::new(Return, "return", Literal::Nil, 1),
+                Token::new(EOF, "", Literal::Nil, 1),
             ],
         );
         assert_tokens(
             "super",
             vec![
-                Token::new(Super, "super", None, 1),
-                Token::new(EOF, "", None, 1),
+                Token::new(Super, "super", Literal::Nil, 1),
+                Token::new(EOF, "", Literal::Nil, 1),
             ],
         );
         assert_tokens(
             "this",
             vec![
-                Token::new(This, "this", None, 1),
-                Token::new(EOF, "", None, 1),
+                Token::new(This, "this", Literal::Nil, 1),
+                Token::new(EOF, "", Literal::Nil, 1),
             ],
         );
         assert_tokens(
             "true",
             vec![
-                Token::new(True, "true", None, 1),
-                Token::new(EOF, "", None, 1),
+                Token::new(True, "true", Literal::Nil, 1),
+                Token::new(EOF, "", Literal::Nil, 1),
             ],
         );
         assert_tokens(
             "var",
             vec![
-                Token::new(Var, "var", None, 1),
-                Token::new(EOF, "", None, 1),
+                Token::new(Var, "var", Literal::Nil, 1),
+                Token::new(EOF, "", Literal::Nil, 1),
             ],
         );
         assert_tokens(
             "while",
             vec![
-                Token::new(While, "while", None, 1),
-                Token::new(EOF, "", None, 1),
+                Token::new(While, "while", Literal::Nil, 1),
+                Token::new(EOF, "", Literal::Nil, 1),
             ],
         );
     }
