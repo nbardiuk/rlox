@@ -21,6 +21,7 @@ impl<'a> Scanner<'a> {
     }
 
     pub fn scan_tokens<W: Write>(&mut self, lox: &mut Lox<W>) -> Vec<Token> {
+        use TokenType::*;
         while !self.is_at_end() {
             // we are at the beginning of the next lexeme.
             self.start = self.current;
@@ -31,6 +32,7 @@ impl<'a> Scanner<'a> {
     }
 
     fn scan_token<W: Write>(&mut self, lox: &mut Lox<W>) {
+        use TokenType::*;
         let c = self.advance();
         match c {
             Some('(') => self.add_token(LeftParen),
@@ -75,8 +77,30 @@ impl<'a> Scanner<'a> {
             Some(' ') | Some('\r') | Some('\t') => {}
             Some('\n') => self.line += 1,
             Some('"') => self.string(lox),
+            Some(d) if d.is_ascii_digit() => self.number(),
             _ => lox.error(self.line, "Unexpected character."),
         }
+    }
+
+    fn number(&mut self) {
+        while self.peek().map(|c| c.is_ascii_digit()).unwrap_or(false) {
+            self.advance();
+        }
+
+        if self.peek() == Some('.')
+            && self
+                .peek_next()
+                .map(|c| c.is_ascii_digit())
+                .unwrap_or(false)
+        {
+            self.advance();
+            while self.peek().map(|c| c.is_ascii_digit()).unwrap_or(false) {
+                self.advance();
+            }
+        }
+
+        let d = self.source[self.start..self.current].parse().unwrap_or(0.);
+        self.add_literal_token(TokenType::Number, Literal::Number(d));
     }
 
     fn string<W: Write>(&mut self, lox: &mut Lox<W>) {
@@ -95,11 +119,15 @@ impl<'a> Scanner<'a> {
         self.advance();
 
         let text = &self.source[self.start + 1..self.current - 1];
-        self.add_literal_token(String, text)
+        self.add_literal_token(TokenType::String, Literal::String(text))
     }
 
     fn peek(&self) -> Option<char> {
         self.source.chars().nth(self.current)
+    }
+
+    fn peek_next(&self) -> Option<char> {
+        self.source.chars().nth(self.current + 1)
     }
 
     fn matches(&mut self, expected: char) -> bool {
@@ -116,7 +144,7 @@ impl<'a> Scanner<'a> {
         self.source.chars().nth(self.current - 1)
     }
 
-    fn add_literal_token(&mut self, typ: TokenType, literal: &'a str) {
+    fn add_literal_token(&mut self, typ: TokenType, literal: Literal<'a>) {
         let text = &self.source[self.start..self.current];
         self.tokens
             .push(Token::new(typ, text, Some(literal), self.line))
@@ -133,15 +161,21 @@ impl<'a> Scanner<'a> {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+pub enum Literal<'a> {
+    String(&'a str),
+    Number(f64),
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub struct Token<'a> {
     typ: TokenType,
     lexeme: &'a str,
-    literal: Option<&'a str>, //TODO in example this is a Java Object
+    literal: Option<Literal<'a>>,
     line: usize,
 }
 
 impl<'a> Token<'a> {
-    fn new(typ: TokenType, lexeme: &'a str, literal: Option<&'a str>, line: usize) -> Self {
+    fn new(typ: TokenType, lexeme: &'a str, literal: Option<Literal<'a>>, line: usize) -> Self {
         Self {
             typ,
             lexeme,
@@ -154,10 +188,10 @@ impl<'a> Token<'a> {
 impl<'a> std::fmt::Display for Token<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
         f.write_fmt(format_args!(
-            "{:?} {} {}",
+            "{:?} {} {:?}",
             self.typ,
             self.lexeme,
-            self.literal.as_ref().unwrap_or(&"")
+            self.literal.as_ref().unwrap_or(&Literal::String(""))
         ))
     }
 }
@@ -208,11 +242,11 @@ enum TokenType {
 
     EOF,
 }
-use TokenType::*;
 
 #[cfg(test)]
 mod spec {
     use super::*;
+    use TokenType::*;
 
     fn assert_tokens<'a>(source: &'a str, expected: Vec<Token<'a>>) {
         let mut lox = Lox::<Vec<u8>>::new();
@@ -335,7 +369,12 @@ mod spec {
             "+\"string literal\"*",
             vec![
                 Token::new(Plus, "+", None, 1),
-                Token::new(String, "\"string literal\"", Some("string literal"), 1),
+                Token::new(
+                    String,
+                    "\"string literal\"",
+                    Some(Literal::String("string literal")),
+                    1,
+                ),
                 Token::new(Star, "*", None, 1),
                 Token::new(EOF, "", None, 1),
             ],
@@ -344,7 +383,7 @@ mod spec {
         assert_tokens(
             "\"any #@^&\"",
             vec![
-                Token::new(String, "\"any #@^&\"", Some("any #@^&"), 1),
+                Token::new(String, "\"any #@^&\"", Some(Literal::String("any #@^&")), 1),
                 Token::new(EOF, "", None, 1),
             ],
         );
@@ -358,10 +397,44 @@ string
                 Token::new(
                     String,
                     "\"multiline\nstring\n\"",
-                    Some("multiline\nstring\n"),
+                    Some(Literal::String("multiline\nstring\n")),
                     3,
                 ),
                 Token::new(EOF, "", None, 3),
+            ],
+        );
+    }
+
+    #[test]
+    fn numbers() {
+        assert_tokens(
+            "1234",
+            vec![
+                Token::new(Number, "1234", Some(Literal::Number(1234.)), 1),
+                Token::new(EOF, "", None, 1),
+            ],
+        );
+        assert_tokens(
+            "23.45",
+            vec![
+                Token::new(Number, "23.45", Some(Literal::Number(23.45)), 1),
+                Token::new(EOF, "", None, 1),
+            ],
+        );
+        assert_tokens(
+            ".345",
+            vec![
+                Token::new(Dot, ".", None, 1),
+                Token::new(Number, "345", Some(Literal::Number(345.)), 1),
+                Token::new(EOF, "", None, 1),
+            ],
+        );
+        assert_tokens(
+            "4567.",
+            vec![
+                Token::new(Number, "4567", Some(Literal::Number(4567.)), 1),
+                Token::new(Dot, ".", None, 1),
+                Token::new(EOF, "", None, 1),
             ],
         );
     }
