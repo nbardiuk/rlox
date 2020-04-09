@@ -9,6 +9,37 @@ pub struct Scanner<'a> {
     line: usize,
 }
 
+fn is_alpha(c: char) -> bool {
+    c.is_ascii_alphabetic() || c == '_'
+}
+
+fn is_alphanumeric(c: char) -> bool {
+    c.is_ascii_alphanumeric() || c == '_'
+}
+
+fn keywords(identifier: &str) -> Option<TokenType> {
+    use TokenType::*;
+    match identifier {
+        "and" => Some(And),
+        "class" => Some(Class),
+        "else" => Some(Else),
+        "false" => Some(False),
+        "for" => Some(For),
+        "fun" => Some(Fun),
+        "if" => Some(If),
+        "nil" => Some(Nil),
+        "or" => Some(Or),
+        "print" => Some(Print),
+        "return" => Some(Return),
+        "super" => Some(Super),
+        "this" => Some(This),
+        "true" => Some(True),
+        "var" => Some(Var),
+        "while" => Some(While),
+        _ => None,
+    }
+}
+
 impl<'a> Scanner<'a> {
     pub fn new(source: &'a str) -> Self {
         Self {
@@ -78,8 +109,19 @@ impl<'a> Scanner<'a> {
             Some('\n') => self.line += 1,
             Some('"') => self.string(lox),
             Some(d) if d.is_ascii_digit() => self.number(),
+            Some(i) if is_alpha(i) => self.identifier(),
             _ => lox.error(self.line, "Unexpected character."),
         }
+    }
+
+    fn identifier(&mut self) {
+        while self.peek().map(is_alphanumeric).unwrap_or(false) {
+            self.advance();
+        }
+
+        let text = &self.source[self.start..self.current];
+        let typ = keywords(text).unwrap_or(TokenType::Identifier);
+        self.add_token(typ);
     }
 
     fn number(&mut self) {
@@ -434,6 +476,148 @@ string
             vec![
                 Token::new(Number, "4567", Some(Literal::Number(4567.)), 1),
                 Token::new(Dot, ".", None, 1),
+                Token::new(EOF, "", None, 1),
+            ],
+        );
+    }
+
+    #[test]
+    fn identifiers() {
+        assert_tokens(
+            "ab_c",
+            vec![
+                Token::new(Identifier, "ab_c", None, 1),
+                Token::new(EOF, "", None, 1),
+            ],
+        );
+        assert_tokens(
+            "orand",
+            vec![
+                Token::new(Identifier, "orand", None, 1),
+                Token::new(EOF, "", None, 1),
+            ],
+        );
+        assert_tokens(
+            "__123",
+            vec![
+                Token::new(Identifier, "__123", None, 1),
+                Token::new(EOF, "", None, 1),
+            ],
+        );
+        assert_tokens(
+            "A123a",
+            vec![
+                Token::new(Identifier, "A123a", None, 1),
+                Token::new(EOF, "", None, 1),
+            ],
+        );
+    }
+
+    #[test]
+    fn keywords() {
+        assert_tokens(
+            "and",
+            vec![
+                Token::new(And, "and", None, 1),
+                Token::new(EOF, "", None, 1),
+            ],
+        );
+        assert_tokens(
+            "class",
+            vec![
+                Token::new(Class, "class", None, 1),
+                Token::new(EOF, "", None, 1),
+            ],
+        );
+        assert_tokens(
+            "else",
+            vec![
+                Token::new(Else, "else", None, 1),
+                Token::new(EOF, "", None, 1),
+            ],
+        );
+        assert_tokens(
+            "false",
+            vec![
+                Token::new(False, "false", None, 1),
+                Token::new(EOF, "", None, 1),
+            ],
+        );
+        assert_tokens(
+            "for",
+            vec![
+                Token::new(For, "for", None, 1),
+                Token::new(EOF, "", None, 1),
+            ],
+        );
+        assert_tokens(
+            "fun",
+            vec![
+                Token::new(Fun, "fun", None, 1),
+                Token::new(EOF, "", None, 1),
+            ],
+        );
+        assert_tokens(
+            "if",
+            vec![Token::new(If, "if", None, 1), Token::new(EOF, "", None, 1)],
+        );
+        assert_tokens(
+            "nil",
+            vec![
+                Token::new(Nil, "nil", None, 1),
+                Token::new(EOF, "", None, 1),
+            ],
+        );
+        assert_tokens(
+            "or",
+            vec![Token::new(Or, "or", None, 1), Token::new(EOF, "", None, 1)],
+        );
+        assert_tokens(
+            "print",
+            vec![
+                Token::new(Print, "print", None, 1),
+                Token::new(EOF, "", None, 1),
+            ],
+        );
+        assert_tokens(
+            "return",
+            vec![
+                Token::new(Return, "return", None, 1),
+                Token::new(EOF, "", None, 1),
+            ],
+        );
+        assert_tokens(
+            "super",
+            vec![
+                Token::new(Super, "super", None, 1),
+                Token::new(EOF, "", None, 1),
+            ],
+        );
+        assert_tokens(
+            "this",
+            vec![
+                Token::new(This, "this", None, 1),
+                Token::new(EOF, "", None, 1),
+            ],
+        );
+        assert_tokens(
+            "true",
+            vec![
+                Token::new(True, "true", None, 1),
+                Token::new(EOF, "", None, 1),
+            ],
+        );
+        assert_tokens(
+            "var",
+            vec![
+                Token::new(Var, "var", None, 1),
+                Token::new(EOF, "", None, 1),
+            ],
+        );
+        assert_tokens(
+            "while",
+            vec![
+                Token::new(While, "while", None, 1),
                 Token::new(EOF, "", None, 1),
             ],
         );
