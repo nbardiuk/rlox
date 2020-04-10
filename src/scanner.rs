@@ -126,8 +126,8 @@ impl<'a> Scanner<'a> {
         let text = &self.source[self.start..self.current];
         let typ = keywords(text).unwrap_or(TokenType::Identifier);
         match typ {
-            TokenType::True => self.add_literal_token(typ, Literal::True),
-            TokenType::False => self.add_literal_token(typ, Literal::False),
+            TokenType::True => self.add_literal_token(typ, Literal::Bool(true)),
+            TokenType::False => self.add_literal_token(typ, Literal::Bool(false)),
             TokenType::Nil => self.add_literal_token(typ, Literal::Nil),
             _ => self.add_token(typ),
         }
@@ -169,7 +169,7 @@ impl<'a> Scanner<'a> {
 
         self.advance();
 
-        let text = &self.source[self.start + 1..self.current - 1];
+        let text = self.source[self.start + 1..self.current - 1].to_string();
         self.add_literal_token(TokenType::String, Literal::String(text))
     }
 
@@ -195,7 +195,7 @@ impl<'a> Scanner<'a> {
         self.source.chars().nth(self.current - 1)
     }
 
-    fn add_literal_token(&mut self, typ: TokenType, literal: Literal<'a>) {
+    fn add_literal_token(&mut self, typ: TokenType, literal: Literal) {
         let text = &self.source[self.start..self.current];
         self.tokens.push(Token::new(typ, text, literal, self.line))
     }
@@ -343,7 +343,7 @@ mod spec {
                 Token::new(
                     String,
                     "\"string literal\"",
-                    Literal::String("string literal"),
+                    Literal::String("string literal".to_string()),
                     1,
                 ),
                 Token::new(Star, "*", Literal::Nil, 1),
@@ -354,7 +354,12 @@ mod spec {
         assert_tokens(
             "\"any #@^&\"",
             vec![
-                Token::new(String, "\"any #@^&\"", Literal::String("any #@^&"), 1),
+                Token::new(
+                    String,
+                    "\"any #@^&\"",
+                    Literal::String("any #@^&".to_string()),
+                    1,
+                ),
                 Token::new(EOF, "", Literal::Nil, 1),
             ],
         );
@@ -368,7 +373,7 @@ string
                 Token::new(
                     String,
                     "\"multiline\nstring\n\"",
-                    Literal::String("multiline\nstring\n"),
+                    Literal::String("multiline\nstring\n".to_string()),
                     3,
                 ),
                 Token::new(EOF, "", Literal::Nil, 3),
@@ -468,7 +473,7 @@ string
         assert_tokens(
             "false",
             vec![
-                Token::new(False, "false", Literal::False, 1),
+                Token::new(False, "false", Literal::Bool(false), 1),
                 Token::new(EOF, "", Literal::Nil, 1),
             ],
         );
@@ -538,7 +543,7 @@ string
         assert_tokens(
             "true",
             vec![
-                Token::new(True, "true", Literal::True, 1),
+                Token::new(True, "true", Literal::Bool(true), 1),
                 Token::new(EOF, "", Literal::Nil, 1),
             ],
         );

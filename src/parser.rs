@@ -133,7 +133,7 @@ impl<'a, W: Write> Parser<'a, W> {
     }
 
     fn previous(&self) -> Token<'a> {
-        self.tokens[self.current - 1] // TODO use get instead of unchecked indexing
+        self.tokens[self.current - 1].clone() // TODO use get instead of unchecked indexing
     }
 
     fn matches(&mut self, types: &[TokenType]) -> bool {
@@ -162,7 +162,7 @@ impl<'a, W: Write> Parser<'a, W> {
     }
 
     fn peek(&self) -> Token<'a> {
-        self.tokens[self.current] // TODO use get instead of unchecked indexing
+        self.tokens[self.current].clone() // TODO use get instead of unchecked indexing
     }
 }
 

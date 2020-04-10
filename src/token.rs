@@ -3,16 +3,16 @@ use std::fmt::Error;
 use std::fmt::Formatter;
 use std::result::Result;
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Token<'a> {
     pub typ: TokenType,
     pub lexeme: &'a str,
-    pub literal: Literal<'a>,
+    pub literal: Literal,
     pub line: usize,
 }
 
 impl<'a> Token<'a> {
-    pub fn new(typ: TokenType, lexeme: &'a str, literal: Literal<'a>, line: usize) -> Self {
+    pub fn new(typ: TokenType, lexeme: &'a str, literal: Literal, line: usize) -> Self {
         Self {
             typ,
             lexeme,
@@ -28,24 +28,22 @@ impl<'a> Display for Token<'a> {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum Literal<'a> {
-    String(&'a str),
+#[derive(Clone, Debug, PartialEq)]
+pub enum Literal {
+    String(String),
     Number(f64),
+    Bool(bool),
     Nil,
-    False,
-    True,
 }
 
-impl<'a> Display for Literal<'a> {
+impl Display for Literal {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
         use Literal::*;
         match self {
             String(s) => write!(f, "\"{}\"", s),
             Number(n) => write!(f, "{}", n),
+            Bool(b) => write!(f, "{}", b),
             Nil => write!(f, "nil"),
-            True => write!(f, "true"),
-            False => write!(f, "false"),
         }
     }
 }

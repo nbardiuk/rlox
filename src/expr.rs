@@ -11,7 +11,7 @@ pub enum Expr<'a> {
     Unary(Token<'a>, Rc<Expr<'a>>),
     Binary(Rc<Expr<'a>>, Token<'a>, Rc<Expr<'a>>),
     Grouping(Rc<Expr<'a>>),
-    Literal(Literal<'a>),
+    Literal(Literal),
 }
 
 impl<'a> Display for Expr<'a> {
