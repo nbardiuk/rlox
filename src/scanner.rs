@@ -6,7 +6,7 @@ use std::io::Write;
 
 pub struct Scanner<'a> {
     source: &'a str,
-    tokens: Vec<Token<'a>>,
+    tokens: Vec<Token>,
     start: usize,
     current: usize,
     line: usize,
@@ -216,14 +216,14 @@ mod spec {
     use super::*;
     use TokenType::*;
 
-    fn assert_tokens<'a>(source: &'a str, expected: Vec<Token<'a>>) {
+    fn assert_tokens<'a>(source: &'a str, expected: Vec<Token>) {
         let mut lox = Lox::<Vec<u8>>::new();
         assert_eq!(Scanner::new(source).scan_tokens(&mut lox), expected);
         assert_eq!(lox.output(), "");
         assert!(!lox.has_error, "no scanning erros");
     }
 
-    fn assert_tokens_error<'a>(source: &'a str, errors: &'a str, expected: Vec<Token<'a>>) {
+    fn assert_tokens_error<'a>(source: &'a str, errors: &'a str, expected: Vec<Token>) {
         let mut lox = Lox::<Vec<u8>>::new();
         assert_eq!(Scanner::new(source).scan_tokens(&mut lox), expected);
         assert!(lox.has_error, "has scanning erros");

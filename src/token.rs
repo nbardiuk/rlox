@@ -4,25 +4,25 @@ use std::fmt::Formatter;
 use std::result::Result;
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct Token<'a> {
+pub struct Token {
     pub typ: TokenType,
-    pub lexeme: &'a str,
+    pub lexeme: String,
     pub literal: Literal,
     pub line: usize,
 }
 
-impl<'a> Token<'a> {
-    pub fn new(typ: TokenType, lexeme: &'a str, literal: Literal, line: usize) -> Self {
+impl<'a> Token {
+    pub fn new(typ: TokenType, lexeme: &str, literal: Literal, line: usize) -> Self {
         Self {
             typ,
-            lexeme,
+            lexeme: lexeme.to_string(),
             literal,
             line,
         }
     }
 }
 
-impl<'a> Display for Token<'a> {
+impl<'a> Display for Token {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
         write!(f, "{:?} {} {}", self.typ, self.lexeme, self.literal)
     }

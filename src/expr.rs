@@ -7,14 +7,14 @@ use std::rc::Rc;
 use std::result::Result;
 
 #[derive(Clone)]
-pub enum Expr<'a> {
-    Unary(Token<'a>, Rc<Expr<'a>>),
-    Binary(Rc<Expr<'a>>, Token<'a>, Rc<Expr<'a>>),
-    Grouping(Rc<Expr<'a>>),
+pub enum Expr {
+    Unary(Token, Rc<Expr>),
+    Binary(Rc<Expr>, Token, Rc<Expr>),
+    Grouping(Rc<Expr>),
     Literal(Literal),
 }
 
-impl<'a> Display for Expr<'a> {
+impl Display for Expr {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
         use Expr::*;
         match self {

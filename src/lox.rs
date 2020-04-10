@@ -69,7 +69,7 @@ impl<W: Write> Lox<W> {
         self.report(line, "", message);
     }
 
-    pub fn error_token<'a>(&mut self, token: Token<'a>, message: &str) {
+    pub fn error_token(&mut self, token: Token, message: &str) {
         match token.typ {
             TokenType::EOF => self.report(token.line, " at end", message),
             _ => self.report(token.line, &format!(" at '{}'", token.lexeme), message),

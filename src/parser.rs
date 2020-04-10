@@ -8,13 +8,13 @@ use std::rc::Rc;
 struct ParserError {}
 
 pub struct Parser<'a, W: Write> {
-    tokens: Vec<Token<'a>>,
+    tokens: Vec<Token>,
     current: usize,
     lox: &'a mut Lox<W>,
 }
 
 impl<'a, W: Write> Parser<'a, W> {
-    pub fn new(lox: &'a mut Lox<W>, tokens: Vec<Token<'a>>) -> Self {
+    pub fn new(lox: &'a mut Lox<W>, tokens: Vec<Token>) -> Self {
         Self {
             tokens,
             current: 0,
@@ -22,15 +22,15 @@ impl<'a, W: Write> Parser<'a, W> {
         }
     }
 
-    pub fn parse(&mut self) -> Option<Expr<'a>> {
+    pub fn parse(&mut self) -> Option<Expr> {
         self.expression().ok()
     }
 
-    fn expression(&mut self) -> Result<Expr<'a>, ParserError> {
+    fn expression(&mut self) -> Result<Expr, ParserError> {
         self.equality()
     }
 
-    fn equality(&mut self) -> Result<Expr<'a>, ParserError> {
+    fn equality(&mut self) -> Result<Expr, ParserError> {
         use TokenType::*;
         let mut expr = self.comparison()?;
 
@@ -43,7 +43,7 @@ impl<'a, W: Write> Parser<'a, W> {
         Result::Ok(expr)
     }
 
-    fn comparison(&mut self) -> Result<Expr<'a>, ParserError> {
+    fn comparison(&mut self) -> Result<Expr, ParserError> {
         use TokenType::*;
         let mut expr = self.addition()?;
 
@@ -56,7 +56,7 @@ impl<'a, W: Write> Parser<'a, W> {
         Result::Ok(expr)
     }
 
-    fn addition(&mut self) -> Result<Expr<'a>, ParserError> {
+    fn addition(&mut self) -> Result<Expr, ParserError> {
         use TokenType::*;
         let mut expr = self.multiplication()?;
 
@@ -69,7 +69,7 @@ impl<'a, W: Write> Parser<'a, W> {
         Result::Ok(expr)
     }
 
-    fn multiplication(&mut self) -> Result<Expr<'a>, ParserError> {
+    fn multiplication(&mut self) -> Result<Expr, ParserError> {
         use TokenType::*;
         let mut expr = self.unary()?;
 
@@ -82,7 +82,7 @@ impl<'a, W: Write> Parser<'a, W> {
         Result::Ok(expr)
     }
 
-    fn unary(&mut self) -> Result<Expr<'a>, ParserError> {
+    fn unary(&mut self) -> Result<Expr, ParserError> {
         use TokenType::*;
         if self.matches(&[Bang, Minus]) {
             let operator = self.previous();
@@ -92,7 +92,7 @@ impl<'a, W: Write> Parser<'a, W> {
         self.primary()
     }
 
-    fn primary(&mut self) -> Result<Expr<'a>, ParserError> {
+    fn primary(&mut self) -> Result<Expr, ParserError> {
         use TokenType::*;
         if self.matches(&[False, True, Nil, Number, String]) {
             return Result::Ok(Expr::Literal(self.previous().literal));
@@ -120,19 +120,19 @@ impl<'a, W: Write> Parser<'a, W> {
         }
     }
 
-    fn consume(&mut self, typ: TokenType, message: &'a str) -> Result<Token<'a>, ParserError> {
+    fn consume(&mut self, typ: TokenType, message: &'a str) -> Result<Token, ParserError> {
         if self.check(typ) {
             return Result::Ok(self.advance());
         }
         self.error(self.peek(), message)
     }
 
-    fn error<T>(&mut self, token: Token<'a>, message: &'a str) -> Result<T, ParserError> {
+    fn error<T>(&mut self, token: Token, message: &'a str) -> Result<T, ParserError> {
         self.lox.error_token(token, message);
         Result::Err(ParserError {})
     }
 
-    fn previous(&self) -> Token<'a> {
+    fn previous(&self) -> Token {
         self.tokens[self.current - 1].clone() // TODO use get instead of unchecked indexing
     }
 
@@ -150,7 +150,7 @@ impl<'a, W: Write> Parser<'a, W> {
         !self.is_at_end() && self.peek().typ == typ
     }
 
-    fn advance(&mut self) -> Token<'a> {
+    fn advance(&mut self) -> Token {
         if !self.is_at_end() {
             self.current += 1
         }
@@ -161,7 +161,7 @@ impl<'a, W: Write> Parser<'a, W> {
         self.peek().typ == TokenType::EOF
     }
 
-    fn peek(&self) -> Token<'a> {
+    fn peek(&self) -> Token {
         self.tokens[self.current].clone() // TODO use get instead of unchecked indexing
     }
 }
