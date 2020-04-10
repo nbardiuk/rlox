@@ -15,13 +15,13 @@ fn evaluate(expr: &Expr) -> Result<token::Literal, RuntimeError> {
     match expr {
         Literal(value) => Ok(value.clone()),
         Grouping(expression) => evaluate(&expression),
-        Unary(operator, right) => match (operator.typ, evaluate(right)) {
+        Unary(op, right) => match (op.typ, evaluate(right)) {
             (_, e @ Err(_)) => e,
             (t::Bang, Ok(r)) => Ok(Bool(!is_truthy(r))),
             (t::Minus, Ok(Number(d))) => Ok(Number(-d)),
-            _ => nan(operator),
+            _ => RuntimeError::new(op, "Operand must be a number"),
         },
-        Binary(left, operator, right) => match (operator.typ, evaluate(left), evaluate(right)) {
+        Binary(left, op, right) => match (op.typ, evaluate(left), evaluate(right)) {
             (_, e @ Err(_), _) => e,
             (_, _, e @ Err(_)) => e,
             (t::Minus, Ok(Number(a)), Ok(Number(b))) => Ok(Number(a - b)),
@@ -29,26 +29,16 @@ fn evaluate(expr: &Expr) -> Result<token::Literal, RuntimeError> {
             (t::Star, Ok(Number(a)), Ok(Number(b))) => Ok(Number(a * b)),
             (t::Plus, Ok(Number(a)), Ok(Number(b))) => Ok(Number(a + b)),
             (t::Plus, Ok(String(a)), Ok(String(b))) => Ok(String(a + &b)),
-            (t::Plus, _, _) => nans_ss(operator),
+            (t::Plus, _, _) => RuntimeError::new(op, "Operands must be two numbers or two strings"),
             (t::Greater, Ok(Number(a)), Ok(Number(b))) => Ok(Bool(a > b)),
             (t::GreaterEqual, Ok(Number(a)), Ok(Number(b))) => Ok(Bool(a >= b)),
             (t::Less, Ok(Number(a)), Ok(Number(b))) => Ok(Bool(a < b)),
             (t::LessEqual, Ok(Number(a)), Ok(Number(b))) => Ok(Bool(a <= b)),
             (t::BangEqual, Ok(a), Ok(b)) => Ok(Bool(a != b)),
             (t::EqualEqual, Ok(a), Ok(b)) => Ok(Bool(a == b)),
-            _ => nans(operator),
+            _ => RuntimeError::new(op, "Operands must be numbers"),
         },
     }
-}
-
-fn nan<T>(operator: &Token) -> Result<T, RuntimeError> {
-    RuntimeError::new(operator, "Operand must be a number")
-}
-fn nans<T>(operator: &Token) -> Result<T, RuntimeError> {
-    RuntimeError::new(operator, "Operands must be numbers")
-}
-fn nans_ss<T>(operator: &Token) -> Result<T, RuntimeError> {
-    RuntimeError::new(operator, "Operands must be two numbers or two strings")
 }
 
 #[derive(Debug, PartialEq)]
