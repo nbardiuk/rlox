@@ -1,5 +1,5 @@
-use crate::scanner::Literal;
-use crate::scanner::Token;
+use crate::token::Literal;
+use crate::token::Token;
 use std::fmt::Display;
 use std::fmt::Error;
 use std::fmt::Formatter;
@@ -41,8 +41,8 @@ mod spec {
 
     #[test]
     fn printing() {
-        use crate::scanner::Literal::*;
-        use crate::scanner::TokenType::{Minus, Star};
+        use crate::token::Literal::*;
+        use crate::token::TokenType::{Minus, Star};
         use Expr::*;
 
         let expression = Binary {
