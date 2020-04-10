@@ -165,3 +165,161 @@ impl<'a, W: Write> Parser<'a, W> {
         self.tokens[self.current] // TODO use get instead of unchecked indexing
     }
 }
+
+#[cfg(test)]
+mod spec {
+    use super::*;
+    use crate::scanner::Scanner;
+
+    fn tree<'a>(source: &'a str) -> String {
+        let mut lox = Lox::<Vec<u8>>::new();
+        let mut scanner = Scanner::new(source);
+        let tokens = scanner.scan_tokens(&mut lox);
+        let mut parser = Parser::new(&mut lox, tokens);
+        let tree = parser.parse().map(|e| e.to_string()).unwrap_or_default();
+        format!("{}{}", lox.output(), tree)
+    }
+
+    #[test]
+    fn not_expression() {
+        assert_eq!(
+            tree("anything\nnot valid"),
+            "[line 1] Error at \'anything\': Expect expression\n"
+        );
+    }
+
+    #[test]
+    fn primary() {
+        assert_eq!(tree("1321.31"), "1321.31");
+        assert_eq!(tree("\"asdf 123\""), "\"asdf 123\"");
+        assert_eq!(tree("true"), "true");
+        assert_eq!(tree("false"), "false");
+        assert_eq!(tree("nil"), "nil");
+    }
+
+    #[test]
+    fn uniary_bang() {
+        assert_eq!(tree("!true"), "(! true)");
+        assert_eq!(tree("!!false"), "(! (! false))");
+    }
+
+    #[test]
+    fn unary_minus() {
+        assert_eq!(tree("-1"), "(- 1)");
+        assert_eq!(tree("--1"), "(- (- 1))");
+    }
+
+    #[test]
+    fn multiplication_slash() {
+        assert_eq!(tree("2/-3"), "(/ 2 (- 3))");
+        assert_eq!(tree("-4/2"), "(/ (- 4) 2)");
+        assert_eq!(tree("1/2/3"), "(/ (/ 1 2) 3)");
+        assert_eq!(tree("1/"), "[line 1] Error at end: Expect expression\n");
+        assert_eq!(tree("/1"), "[line 1] Error at \'/\': Expect expression\n");
+    }
+
+    #[test]
+    fn multiplication_star() {
+        assert_eq!(tree("2*-3"), "(* 2 (- 3))");
+        assert_eq!(tree("-4*2"), "(* (- 4) 2)");
+        assert_eq!(tree("1*2*3"), "(* (* 1 2) 3)");
+        assert_eq!(tree("1*"), "[line 1] Error at end: Expect expression\n");
+        assert_eq!(tree("*1"), "[line 1] Error at \'*\': Expect expression\n");
+    }
+
+    #[test]
+    fn multiplication() {
+        assert_eq!(tree("1*2/3*4/5"), "(/ (* (/ (* 1 2) 3) 4) 5)");
+    }
+
+    #[test]
+    fn addition_plus() {
+        assert_eq!(tree("1+-2"), "(+ 1 (- 2))");
+        assert_eq!(tree("-1+2"), "(+ (- 1) 2)");
+        assert_eq!(tree("1+2+3"), "(+ (+ 1 2) 3)");
+        assert_eq!(tree("1*2 + 3*4"), "(+ (* 1 2) (* 3 4))");
+        assert_eq!(tree("1 + 2/3 + 4"), "(+ (+ 1 (/ 2 3)) 4)");
+        assert_eq!(tree("1+"), "[line 1] Error at end: Expect expression\n");
+        assert_eq!(tree("+1"), "[line 1] Error at \'+\': Expect expression\n");
+    }
+
+    #[test]
+    fn addition_minus() {
+        assert_eq!(tree("1--2"), "(- 1 (- 2))");
+        assert_eq!(tree("-1-2"), "(- (- 1) 2)");
+        assert_eq!(tree("1-2-3"), "(- (- 1 2) 3)");
+        assert_eq!(tree("1*2 - 3*4"), "(- (* 1 2) (* 3 4))");
+        assert_eq!(tree("1 - 2/3 - 4"), "(- (- 1 (/ 2 3)) 4)");
+        assert_eq!(tree("1-"), "[line 1] Error at end: Expect expression\n");
+    }
+
+    #[test]
+    fn comparison_greater() {
+        assert_eq!(tree("1>2"), "(> 1 2)");
+        assert_eq!(tree("1>2>3"), "(> (> 1 2) 3)");
+        assert_eq!(tree("1+2>3*4"), "(> (+ 1 2) (* 3 4))");
+        assert_eq!(tree("1>"), "[line 1] Error at end: Expect expression\n");
+        assert_eq!(tree(">1"), "[line 1] Error at \'>\': Expect expression\n");
+    }
+
+    #[test]
+    fn comparison_greater_eq() {
+        assert_eq!(tree("1>=2"), "(>= 1 2)");
+        assert_eq!(tree("1>=2>=3"), "(>= (>= 1 2) 3)");
+        assert_eq!(tree("1+2>=3*4"), "(>= (+ 1 2) (* 3 4))");
+        assert_eq!(tree("1>="), "[line 1] Error at end: Expect expression\n");
+        assert_eq!(tree(">=1"), "[line 1] Error at \'>=\': Expect expression\n");
+    }
+
+    #[test]
+    fn comparison_less() {
+        assert_eq!(tree("1<2"), "(< 1 2)");
+        assert_eq!(tree("1<2<3"), "(< (< 1 2) 3)");
+        assert_eq!(tree("1+2<3*4"), "(< (+ 1 2) (* 3 4))");
+        assert_eq!(tree("1<"), "[line 1] Error at end: Expect expression\n");
+        assert_eq!(tree("<1"), "[line 1] Error at \'<\': Expect expression\n");
+    }
+
+    #[test]
+    fn comparison_less_eq() {
+        assert_eq!(tree("1<=2"), "(<= 1 2)");
+        assert_eq!(tree("1<=2<=3"), "(<= (<= 1 2) 3)");
+        assert_eq!(tree("1+2<=3*4"), "(<= (+ 1 2) (* 3 4))");
+        assert_eq!(tree("1<="), "[line 1] Error at end: Expect expression\n");
+        assert_eq!(tree("<=1"), "[line 1] Error at \'<=\': Expect expression\n");
+    }
+
+    #[test]
+    fn equality_eq() {
+        assert_eq!(tree("1==2"), "(== 1 2)");
+        assert_eq!(tree("1==2==3"), "(== (== 1 2) 3)");
+        assert_eq!(tree("1+2==3<=4==5*6"), "(== (== (+ 1 2) (<= 3 4)) (* 5 6))");
+        assert_eq!(tree("1=="), "[line 1] Error at end: Expect expression\n");
+        assert_eq!(tree("==1"), "[line 1] Error at \'==\': Expect expression\n");
+    }
+
+    #[test]
+    fn equality_not_eq() {
+        assert_eq!(tree("1!=2"), "(!= 1 2)");
+        assert_eq!(tree("1!=2!=3"), "(!= (!= 1 2) 3)");
+        assert_eq!(tree("1+2!=3<=4!=5*6"), "(!= (!= (+ 1 2) (<= 3 4)) (* 5 6))");
+        assert_eq!(tree("1!="), "[line 1] Error at end: Expect expression\n");
+        assert_eq!(tree("!=1"), "[line 1] Error at \'!=\': Expect expression\n");
+    }
+
+    #[test]
+    fn grouping() {
+        assert_eq!(tree("(1)"), "(group 1)");
+        assert_eq!(tree("1 + (2 + 3)"), "(+ 1 (group (+ 2 3)))");
+        assert_eq!(tree("1 / (2 - 3)"), "(/ 1 (group (- 2 3)))");
+        assert_eq!(tree("-(1 - 2)"), "(- (group (- 1 2)))");
+        assert_eq!(tree("!(1 >= 2)"), "(! (group (>= 1 2)))");
+        assert_eq!(tree("("), "[line 1] Error at end: Expect expression\n");
+        assert_eq!(tree(")"), "[line 1] Error at \')\': Expect expression\n");
+        assert_eq!(tree("1)"), "1"); // TODO unmatched closing paren is ignored
+        assert_eq!(
+            tree("(1"),
+            "[line 1] Error at end: Expect \')\' after expression\n"
+        );
+    }
+}
