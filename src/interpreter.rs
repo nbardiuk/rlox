@@ -15,28 +15,25 @@ fn evaluate(expr: &Expr) -> Result<token::Literal, RuntimeError> {
     match expr {
         Literal(value) => Ok(value.clone()),
         Grouping(expression) => evaluate(&expression),
-        Unary(op, right) => match (op.typ, evaluate(right)) {
-            (_, e @ Err(_)) => e,
-            (t::Bang, Ok(r)) => Ok(Bool(!is_truthy(r))),
-            (t::Minus, Ok(Number(d))) => Ok(Number(-d)),
-            _ => RuntimeError::new(op, "Operand must be a number"),
+        Unary(op, right) => match (op.typ, evaluate(right)?) {
+            (t::Bang, r) => Ok(Bool(!is_truthy(r))),
+            (t::Minus, Number(d)) => Ok(Number(-d)),
+            _ => err(op, "Operand must be a number"),
         },
-        Binary(left, op, right) => match (op.typ, evaluate(left), evaluate(right)) {
-            (_, e @ Err(_), _) => e,
-            (_, _, e @ Err(_)) => e,
-            (t::Minus, Ok(Number(a)), Ok(Number(b))) => Ok(Number(a - b)),
-            (t::Slash, Ok(Number(a)), Ok(Number(b))) => Ok(Number(a / b)),
-            (t::Star, Ok(Number(a)), Ok(Number(b))) => Ok(Number(a * b)),
-            (t::Plus, Ok(Number(a)), Ok(Number(b))) => Ok(Number(a + b)),
-            (t::Plus, Ok(String(a)), Ok(String(b))) => Ok(String(a + &b)),
-            (t::Plus, _, _) => RuntimeError::new(op, "Operands must be two numbers or two strings"),
-            (t::Greater, Ok(Number(a)), Ok(Number(b))) => Ok(Bool(a > b)),
-            (t::GreaterEqual, Ok(Number(a)), Ok(Number(b))) => Ok(Bool(a >= b)),
-            (t::Less, Ok(Number(a)), Ok(Number(b))) => Ok(Bool(a < b)),
-            (t::LessEqual, Ok(Number(a)), Ok(Number(b))) => Ok(Bool(a <= b)),
-            (t::BangEqual, Ok(a), Ok(b)) => Ok(Bool(a != b)),
-            (t::EqualEqual, Ok(a), Ok(b)) => Ok(Bool(a == b)),
-            _ => RuntimeError::new(op, "Operands must be numbers"),
+        Binary(left, op, right) => match (op.typ, evaluate(left)?, evaluate(right)?) {
+            (t::Minus, Number(a), Number(b)) => Ok(Number(a - b)),
+            (t::Slash, Number(a), Number(b)) => Ok(Number(a / b)),
+            (t::Star, Number(a), Number(b)) => Ok(Number(a * b)),
+            (t::Plus, Number(a), Number(b)) => Ok(Number(a + b)),
+            (t::Plus, String(a), String(b)) => Ok(String(a + &b)),
+            (t::Greater, Number(a), Number(b)) => Ok(Bool(a > b)),
+            (t::GreaterEqual, Number(a), Number(b)) => Ok(Bool(a >= b)),
+            (t::Less, Number(a), Number(b)) => Ok(Bool(a < b)),
+            (t::LessEqual, Number(a), Number(b)) => Ok(Bool(a <= b)),
+            (t::BangEqual, a, b) => Ok(Bool(a != b)),
+            (t::EqualEqual, a, b) => Ok(Bool(a == b)),
+            (t::Plus, _, _) => err(op, "Operands must be two numbers or two strings"),
+            _ => err(op, "Operands must be numbers"),
         },
     }
 }
@@ -46,13 +43,12 @@ pub struct RuntimeError {
     pub token: Token,
     pub message: std::string::String,
 }
-impl RuntimeError {
-    fn new<T>(token: &Token, message: &str) -> Result<T, Self> {
-        Err(RuntimeError {
-            token: token.clone(),
-            message: message.to_string(),
-        })
-    }
+
+fn err<T>(token: &Token, message: &str) -> Result<T, RuntimeError> {
+    Err(RuntimeError {
+        token: token.clone(),
+        message: message.to_string(),
+    })
 }
 
 fn is_truthy(l: token::Literal) -> bool {
@@ -62,6 +58,7 @@ fn is_truthy(l: token::Literal) -> bool {
         _ => true,
     }
 }
+
 #[cfg(test)]
 mod spec {
     use super::*;
