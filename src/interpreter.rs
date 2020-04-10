@@ -190,4 +190,11 @@ mod spec {
         assert_eq!(eval("\"true\"!=true"), Bool(true));
         assert_eq!(eval("\"1\"!=1"), Bool(true));
     }
+
+    #[test]
+    fn grouping() {
+        assert_eq!(eval("3*(1+2)"), Number(9.));
+        assert_eq!(eval("!(1==2)"), Bool(true));
+        assert_eq!(eval("-(1+nil)"), Nil); // TODO report error
+    }
 }
