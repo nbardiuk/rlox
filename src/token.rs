@@ -3,12 +3,12 @@ use std::fmt::Error;
 use std::fmt::Formatter;
 use std::result::Result;
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Token<'a> {
-    typ: TokenType,
+    pub typ: TokenType,
     pub lexeme: &'a str,
-    literal: Literal<'a>,
-    line: usize,
+    pub literal: Literal<'a>,
+    pub line: usize,
 }
 
 impl<'a> Token<'a> {
@@ -28,11 +28,13 @@ impl<'a> Display for Token<'a> {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Literal<'a> {
     String(&'a str),
     Number(f64),
     Nil,
+    False,
+    True,
 }
 
 impl<'a> Display for Literal<'a> {
@@ -42,6 +44,8 @@ impl<'a> Display for Literal<'a> {
             String(s) => write!(f, "\"{}\"", s),
             Number(n) => write!(f, "{}", n),
             Nil => write!(f, "nil"),
+            True => write!(f, "true"),
+            False => write!(f, "false"),
         }
     }
 }

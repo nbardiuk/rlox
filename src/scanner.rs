@@ -125,7 +125,12 @@ impl<'a> Scanner<'a> {
 
         let text = &self.source[self.start..self.current];
         let typ = keywords(text).unwrap_or(TokenType::Identifier);
-        self.add_token(typ);
+        match typ {
+            TokenType::True => self.add_literal_token(typ, Literal::True),
+            TokenType::False => self.add_literal_token(typ, Literal::False),
+            TokenType::Nil => self.add_literal_token(typ, Literal::Nil),
+            _ => self.add_token(typ),
+        }
     }
 
     fn number(&mut self) {
@@ -463,7 +468,7 @@ string
         assert_tokens(
             "false",
             vec![
-                Token::new(False, "false", Literal::Nil, 1),
+                Token::new(False, "false", Literal::False, 1),
                 Token::new(EOF, "", Literal::Nil, 1),
             ],
         );
@@ -533,7 +538,7 @@ string
         assert_tokens(
             "true",
             vec![
-                Token::new(True, "true", Literal::Nil, 1),
+                Token::new(True, "true", Literal::True, 1),
                 Token::new(EOF, "", Literal::Nil, 1),
             ],
         );
