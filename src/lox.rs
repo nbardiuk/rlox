@@ -55,7 +55,7 @@ impl<W: Write> Lox<W> {
     pub fn run_prompt(&mut self) -> io::Result<()> {
         loop {
             print!("> ");
-            io::stdout().flush()?;
+            self.out.flush()?;
 
             let mut input = String::new();
             io::stdin().read_line(&mut input)?;
