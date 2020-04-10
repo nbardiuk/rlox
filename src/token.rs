@@ -11,7 +11,7 @@ pub struct Token {
     pub line: usize,
 }
 
-impl<'a> Token {
+impl Token {
     pub fn new(typ: TokenType, lexeme: &str, literal: Literal, line: usize) -> Self {
         Self {
             typ,
@@ -22,7 +22,7 @@ impl<'a> Token {
     }
 }
 
-impl<'a> Display for Token {
+impl Display for Token {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
         write!(f, "{:?} {} {}", self.typ, self.lexeme, self.literal)
     }
