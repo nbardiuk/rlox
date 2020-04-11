@@ -26,6 +26,7 @@ impl<'a, W: Write> Parser<'a, W> {
 
     pub fn parse(&mut self) -> Vec<Stmt> {
         let mut statements = vec![];
+        // FIXME infinite loop when missing ';'
         while !self.is_at_end() {
             if let Ok(statement) = self.statement() {
                 statements.push(statement);
@@ -243,130 +244,139 @@ mod spec {
 
     #[test]
     fn primary() {
-        assert_eq!(tree("1321.31"), "1321.31");
-        assert_eq!(tree("\"asdf 123\""), "\"asdf 123\"");
-        assert_eq!(tree("true"), "true");
-        assert_eq!(tree("false"), "false");
-        assert_eq!(tree("nil"), "nil");
+        assert_eq!(parse("1321.31;"), vec!["(expr 1321.31)"]);
+        assert_eq!(parse("\"asdf 123\";"), vec!["(expr \"asdf 123\")"]);
+        assert_eq!(parse("true;"), vec!["(expr true)"]);
+        assert_eq!(parse("false;"), vec!["(expr false)"]);
+        assert_eq!(parse("nil;"), vec!["(expr nil)"]);
     }
 
     #[test]
     fn uniary_bang() {
-        assert_eq!(tree("!true"), "(! true)");
-        assert_eq!(tree("!!false"), "(! (! false))");
+        assert_eq!(parse("!true;"), vec!["(expr (! true))"]);
+        assert_eq!(parse("!!false;"), vec!["(expr (! (! false)))"]);
     }
 
     #[test]
     fn unary_minus() {
-        assert_eq!(tree("-1"), "(- 1)");
-        assert_eq!(tree("--1"), "(- (- 1))");
+        assert_eq!(parse("-1;"), vec!["(expr (- 1))"]);
+        assert_eq!(parse("--1;"), vec!["(expr (- (- 1)))"]);
     }
 
     #[test]
     fn multiplication_slash() {
-        assert_eq!(tree("2/-3"), "(/ 2 (- 3))");
-        assert_eq!(tree("-4/2"), "(/ (- 4) 2)");
-        assert_eq!(tree("1/2/3"), "(/ (/ 1 2) 3)");
+        assert_eq!(parse("2/-3;"), vec!["(expr (/ 2 (- 3)))"]);
+        assert_eq!(parse("-4/2;"), vec!["(expr (/ (- 4) 2))"]);
+        assert_eq!(parse("1/2/3;"), vec!["(expr (/ (/ 1 2) 3))"]);
         assert_eq!(tree("1/"), "[line 1] Error at end: Expect expression\n");
         assert_eq!(tree("/1"), "[line 1] Error at \'/\': Expect expression\n");
     }
 
     #[test]
     fn multiplication_star() {
-        assert_eq!(tree("2*-3"), "(* 2 (- 3))");
-        assert_eq!(tree("-4*2"), "(* (- 4) 2)");
-        assert_eq!(tree("1*2*3"), "(* (* 1 2) 3)");
+        assert_eq!(parse("2*-3;"), vec!["(expr (* 2 (- 3)))"]);
+        assert_eq!(parse("-4*2;"), vec!["(expr (* (- 4) 2))"]);
+        assert_eq!(parse("1*2*3;"), vec!["(expr (* (* 1 2) 3))"]);
         assert_eq!(tree("1*"), "[line 1] Error at end: Expect expression\n");
         assert_eq!(tree("*1"), "[line 1] Error at \'*\': Expect expression\n");
     }
 
     #[test]
     fn multiplication() {
-        assert_eq!(tree("1*2/3*4/5"), "(/ (* (/ (* 1 2) 3) 4) 5)");
+        assert_eq!(
+            parse("1*2/3*4/5;"),
+            vec!["(expr (/ (* (/ (* 1 2) 3) 4) 5))"]
+        );
     }
 
     #[test]
     fn addition_plus() {
-        assert_eq!(tree("1+-2"), "(+ 1 (- 2))");
-        assert_eq!(tree("-1+2"), "(+ (- 1) 2)");
-        assert_eq!(tree("1+2+3"), "(+ (+ 1 2) 3)");
-        assert_eq!(tree("1*2 + 3*4"), "(+ (* 1 2) (* 3 4))");
-        assert_eq!(tree("1 + 2/3 + 4"), "(+ (+ 1 (/ 2 3)) 4)");
+        assert_eq!(parse("1+-2;"), vec!["(expr (+ 1 (- 2)))"]);
+        assert_eq!(parse("-1+2;"), vec!["(expr (+ (- 1) 2))"]);
+        assert_eq!(parse("1+2+3;"), vec!["(expr (+ (+ 1 2) 3))"]);
+        assert_eq!(parse("1*2 + 3*4;"), vec!["(expr (+ (* 1 2) (* 3 4)))"]);
+        assert_eq!(parse("1 + 2/3 + 4;"), vec!["(expr (+ (+ 1 (/ 2 3)) 4))"]);
         assert_eq!(tree("1+"), "[line 1] Error at end: Expect expression\n");
         assert_eq!(tree("+1"), "[line 1] Error at \'+\': Expect expression\n");
     }
 
     #[test]
     fn addition_minus() {
-        assert_eq!(tree("1--2"), "(- 1 (- 2))");
-        assert_eq!(tree("-1-2"), "(- (- 1) 2)");
-        assert_eq!(tree("1-2-3"), "(- (- 1 2) 3)");
-        assert_eq!(tree("1*2 - 3*4"), "(- (* 1 2) (* 3 4))");
-        assert_eq!(tree("1 - 2/3 - 4"), "(- (- 1 (/ 2 3)) 4)");
+        assert_eq!(parse("1--2;"), vec!["(expr (- 1 (- 2)))"]);
+        assert_eq!(parse("-1-2;"), vec!["(expr (- (- 1) 2))"]);
+        assert_eq!(parse("1-2-3;"), vec!["(expr (- (- 1 2) 3))"]);
+        assert_eq!(parse("1*2 - 3*4;"), vec!["(expr (- (* 1 2) (* 3 4)))"]);
+        assert_eq!(parse("1 - 2/3 - 4;"), vec!["(expr (- (- 1 (/ 2 3)) 4))"]);
         assert_eq!(tree("1-"), "[line 1] Error at end: Expect expression\n");
     }
 
     #[test]
     fn comparison_greater() {
-        assert_eq!(tree("1>2"), "(> 1 2)");
-        assert_eq!(tree("1>2>3"), "(> (> 1 2) 3)");
-        assert_eq!(tree("1+2>3*4"), "(> (+ 1 2) (* 3 4))");
+        assert_eq!(parse("1>2;"), vec!["(expr (> 1 2))"]);
+        assert_eq!(parse("1>2>3;"), vec!["(expr (> (> 1 2) 3))"]);
+        assert_eq!(parse("1+2>3*4;"), vec!["(expr (> (+ 1 2) (* 3 4)))"]);
         assert_eq!(tree("1>"), "[line 1] Error at end: Expect expression\n");
         assert_eq!(tree(">1"), "[line 1] Error at \'>\': Expect expression\n");
     }
 
     #[test]
     fn comparison_greater_eq() {
-        assert_eq!(tree("1>=2"), "(>= 1 2)");
-        assert_eq!(tree("1>=2>=3"), "(>= (>= 1 2) 3)");
-        assert_eq!(tree("1+2>=3*4"), "(>= (+ 1 2) (* 3 4))");
+        assert_eq!(parse("1>=2;"), vec!["(expr (>= 1 2))"]);
+        assert_eq!(parse("1>=2>=3;"), vec!["(expr (>= (>= 1 2) 3))"]);
+        assert_eq!(parse("1+2>=3*4;"), vec!["(expr (>= (+ 1 2) (* 3 4)))"]);
         assert_eq!(tree("1>="), "[line 1] Error at end: Expect expression\n");
         assert_eq!(tree(">=1"), "[line 1] Error at \'>=\': Expect expression\n");
     }
 
     #[test]
     fn comparison_less() {
-        assert_eq!(tree("1<2"), "(< 1 2)");
-        assert_eq!(tree("1<2<3"), "(< (< 1 2) 3)");
-        assert_eq!(tree("1+2<3*4"), "(< (+ 1 2) (* 3 4))");
+        assert_eq!(parse("1<2;"), vec!["(expr (< 1 2))"]);
+        assert_eq!(parse("1<2<3;"), vec!["(expr (< (< 1 2) 3))"]);
+        assert_eq!(parse("1+2<3*4;"), vec!["(expr (< (+ 1 2) (* 3 4)))"]);
         assert_eq!(tree("1<"), "[line 1] Error at end: Expect expression\n");
         assert_eq!(tree("<1"), "[line 1] Error at \'<\': Expect expression\n");
     }
 
     #[test]
     fn comparison_less_eq() {
-        assert_eq!(tree("1<=2"), "(<= 1 2)");
-        assert_eq!(tree("1<=2<=3"), "(<= (<= 1 2) 3)");
-        assert_eq!(tree("1+2<=3*4"), "(<= (+ 1 2) (* 3 4))");
+        assert_eq!(parse("1<=2;"), vec!["(expr (<= 1 2))"]);
+        assert_eq!(parse("1<=2<=3;"), vec!["(expr (<= (<= 1 2) 3))"]);
+        assert_eq!(parse("1+2<=3*4;"), vec!["(expr (<= (+ 1 2) (* 3 4)))"]);
         assert_eq!(tree("1<="), "[line 1] Error at end: Expect expression\n");
         assert_eq!(tree("<=1"), "[line 1] Error at \'<=\': Expect expression\n");
     }
 
     #[test]
     fn equality_eq() {
-        assert_eq!(tree("1==2"), "(== 1 2)");
-        assert_eq!(tree("1==2==3"), "(== (== 1 2) 3)");
-        assert_eq!(tree("1+2==3<=4==5*6"), "(== (== (+ 1 2) (<= 3 4)) (* 5 6))");
+        assert_eq!(parse("1==2;"), vec!["(expr (== 1 2))"]);
+        assert_eq!(parse("1==2==3;"), vec!["(expr (== (== 1 2) 3))"]);
+        assert_eq!(
+            parse("1+2==3<=4==5*6;"),
+            vec!["(expr (== (== (+ 1 2) (<= 3 4)) (* 5 6)))"]
+        );
         assert_eq!(tree("1=="), "[line 1] Error at end: Expect expression\n");
         assert_eq!(tree("==1"), "[line 1] Error at \'==\': Expect expression\n");
     }
 
     #[test]
     fn equality_not_eq() {
-        assert_eq!(tree("1!=2"), "(!= 1 2)");
-        assert_eq!(tree("1!=2!=3"), "(!= (!= 1 2) 3)");
-        assert_eq!(tree("1+2!=3<=4!=5*6"), "(!= (!= (+ 1 2) (<= 3 4)) (* 5 6))");
+        assert_eq!(parse("1!=2;"), vec!["(expr (!= 1 2))"]);
+        assert_eq!(parse("1!=2!=3;"), vec!["(expr (!= (!= 1 2) 3))"]);
+        assert_eq!(
+            parse("1+2!=3<=4!=5*6;"),
+            vec!["(expr (!= (!= (+ 1 2) (<= 3 4)) (* 5 6)))"]
+        );
         assert_eq!(tree("1!="), "[line 1] Error at end: Expect expression\n");
         assert_eq!(tree("!=1"), "[line 1] Error at \'!=\': Expect expression\n");
     }
 
     #[test]
     fn grouping() {
-        assert_eq!(tree("(1)"), "(group 1)");
-        assert_eq!(tree("1 + (2 + 3)"), "(+ 1 (group (+ 2 3)))");
-        assert_eq!(tree("1 / (2 - 3)"), "(/ 1 (group (- 2 3)))");
-        assert_eq!(tree("-(1 - 2)"), "(- (group (- 1 2)))");
-        assert_eq!(tree("!(1 >= 2)"), "(! (group (>= 1 2)))");
+        assert_eq!(parse("(1);"), vec!["(expr (group 1))"]);
+        assert_eq!(parse("1 + (2 + 3);"), vec!["(expr (+ 1 (group (+ 2 3))))"]);
+        assert_eq!(parse("1 / (2 - 3);"), vec!["(expr (/ 1 (group (- 2 3))))"]);
+        assert_eq!(parse("-(1 - 2);"), vec!["(expr (- (group (- 1 2))))"]);
+        assert_eq!(parse("!(1 >= 2);"), vec!["(expr (! (group (>= 1 2))))"]);
         assert_eq!(tree("("), "[line 1] Error at end: Expect expression\n");
         assert_eq!(tree(")"), "[line 1] Error at \')\': Expect expression\n");
         assert_eq!(tree("1)"), "1"); // TODO unmatched closing paren is ignored
