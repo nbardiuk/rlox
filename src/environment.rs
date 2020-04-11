@@ -25,9 +25,8 @@ impl Environment {
 
     pub fn define(&mut self, token: &Token, value: Literal) {
         let var = &token.lexeme;
-        for values in self.scopes.iter_mut().rev() {
+        if let Some(values) = self.scopes.last_mut() {
             values.insert(var.clone(), value);
-            break;
         }
     }
 
