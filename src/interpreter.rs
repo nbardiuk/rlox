@@ -51,8 +51,7 @@ impl Interpreter {
             Variable(name) => self.environment.get(name),
             Asign(name, value) => {
                 let value = self.evaluate(value)?;
-                self.environment.assign(name, value);
-                self.environment.get(name)
+                self.environment.assign(name, value)
             }
             Grouping(expression) => self.evaluate(&expression),
             Unary(op, right) => match (op.typ, self.evaluate(right)?) {
@@ -96,7 +95,7 @@ impl RuntimeError {
     }
 }
 
-fn err<T>(token: &Token, message: &str) -> Result<T, RuntimeError> {
+pub fn err<T>(token: &Token, message: &str) -> Result<T, RuntimeError> {
     Err(RuntimeError::new(token, message))
 }
 
