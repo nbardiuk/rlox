@@ -1,58 +1,76 @@
 use crate::ast::Expr::{self, *};
 use crate::ast::Stmt::{self, *};
+use crate::environment::Environment;
 use crate::lox::Lox;
 use crate::token::{self, Literal::*, Token, TokenType as t};
 use std::io::Write;
 use std::result::Result::{Err, Ok};
 
-pub fn interpret<W: Write>(lox: &mut Lox<W>, statements: Vec<Stmt>) {
-    for stmt in statements {
-        if let Err(e) = execute(lox, &stmt) {
-            lox.runtime_error(e);
-            break;
-        }
-    }
+#[derive(Default)]
+pub struct Interpreter {
+    environment: Environment,
+    //TODO extract lox to field
 }
 
-fn execute<W: Write>(lox: &mut Lox<W>, stmt: &Stmt) -> Result<(), RuntimeError> {
-    match stmt {
-        Expression(expression) => evaluate(expression).map(|_| ()),
-        Print(expression) => {
-            let val = evaluate(expression)?;
-            lox.println(&val.to_string());
-            Ok(())
-        }
-        Var(_, _) => {
-            Ok(()) // TODO store var value
+impl Interpreter {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn interpret<W: Write>(&mut self, lox: &mut Lox<W>, statements: Vec<Stmt>) {
+        for stmt in statements {
+            if let Err(e) = self.execute(lox, &stmt) {
+                lox.runtime_error(e);
+                break;
+            }
         }
     }
-}
 
-fn evaluate(expr: &Expr) -> Result<token::Literal, RuntimeError> {
-    match expr {
-        Literal(value) => Ok(value.clone()),
-        Grouping(expression) => evaluate(&expression),
-        Unary(op, right) => match (op.typ, evaluate(right)?) {
-            (t::Bang, r) => Ok(Bool(!is_truthy(r))),
-            (t::Minus, Number(d)) => Ok(Number(-d)),
-            _ => err(op, "Operand must be a number"),
-        },
-        Binary(left, op, right) => match (op.typ, evaluate(left)?, evaluate(right)?) {
-            (t::Minus, Number(a), Number(b)) => Ok(Number(a - b)),
-            (t::Slash, Number(a), Number(b)) => Ok(Number(a / b)),
-            (t::Star, Number(a), Number(b)) => Ok(Number(a * b)),
-            (t::Plus, Number(a), Number(b)) => Ok(Number(a + b)),
-            (t::Plus, String(a), String(b)) => Ok(String(a + &b)),
-            (t::Greater, Number(a), Number(b)) => Ok(Bool(a > b)),
-            (t::GreaterEqual, Number(a), Number(b)) => Ok(Bool(a >= b)),
-            (t::Less, Number(a), Number(b)) => Ok(Bool(a < b)),
-            (t::LessEqual, Number(a), Number(b)) => Ok(Bool(a <= b)),
-            (t::BangEqual, a, b) => Ok(Bool(a != b)),
-            (t::EqualEqual, a, b) => Ok(Bool(a == b)),
-            (t::Plus, _, _) => err(op, "Operands must be two numbers or two strings"),
-            _ => err(op, "Operands must be numbers"),
-        },
-        Variable(_) => Ok(Nil), // TODO read variable value
+    fn execute<W: Write>(&mut self, lox: &mut Lox<W>, stmt: &Stmt) -> Result<(), RuntimeError> {
+        match stmt {
+            Expression(expression) => {
+                self.evaluate(expression).map(|_| ())?;
+            }
+            Print(expression) => {
+                let val = self.evaluate(expression)?;
+                lox.println(&val.to_string());
+            }
+            Var(name, initializer) => match initializer {
+                Some(i) => self.environment.define(name, self.evaluate(i)?),
+                _ => self.environment.define(name, Nil),
+            },
+        }
+        Ok(())
+    }
+
+    fn evaluate(&self, expr: &Expr) -> Result<token::Literal, RuntimeError> {
+        match expr {
+            Literal(value) => Ok(value.clone()),
+            Variable(name) => self.environment.get(name),
+            Grouping(expression) => self.evaluate(&expression),
+            Unary(op, right) => match (op.typ, self.evaluate(right)?) {
+                (t::Bang, r) => Ok(Bool(!is_truthy(r))),
+                (t::Minus, Number(d)) => Ok(Number(-d)),
+                _ => err(op, "Operand must be a number"),
+            },
+            Binary(left, op, right) => {
+                match (op.typ, self.evaluate(left)?, self.evaluate(right)?) {
+                    (t::Minus, Number(a), Number(b)) => Ok(Number(a - b)),
+                    (t::Slash, Number(a), Number(b)) => Ok(Number(a / b)),
+                    (t::Star, Number(a), Number(b)) => Ok(Number(a * b)),
+                    (t::Plus, Number(a), Number(b)) => Ok(Number(a + b)),
+                    (t::Plus, String(a), String(b)) => Ok(String(a + &b)),
+                    (t::Greater, Number(a), Number(b)) => Ok(Bool(a > b)),
+                    (t::GreaterEqual, Number(a), Number(b)) => Ok(Bool(a >= b)),
+                    (t::Less, Number(a), Number(b)) => Ok(Bool(a < b)),
+                    (t::LessEqual, Number(a), Number(b)) => Ok(Bool(a <= b)),
+                    (t::BangEqual, a, b) => Ok(Bool(a != b)),
+                    (t::EqualEqual, a, b) => Ok(Bool(a == b)),
+                    (t::Plus, _, _) => err(op, "Operands must be two numbers or two strings"),
+                    _ => err(op, "Operands must be numbers"),
+                }
+            }
+        }
     }
 }
 
@@ -62,11 +80,17 @@ pub struct RuntimeError {
     pub message: std::string::String,
 }
 
+impl RuntimeError {
+    pub fn new(token: &Token, message: &str) -> RuntimeError {
+        RuntimeError {
+            token: token.clone(),
+            message: message.to_string(),
+        }
+    }
+}
+
 fn err<T>(token: &Token, message: &str) -> Result<T, RuntimeError> {
-    Err(RuntimeError {
-        token: token.clone(),
-        message: message.to_string(),
-    })
+    Err(RuntimeError::new(token, message))
 }
 
 fn is_truthy(l: token::Literal) -> bool {
@@ -89,7 +113,7 @@ mod spec {
         let tokens = scanner.scan_tokens(&mut lox);
         let mut parser = Parser::new(&mut lox, tokens);
         let statements = parser.parse();
-        interpret(&mut lox, statements);
+        Interpreter::new().interpret(&mut lox, statements);
         lox.output()
     }
 
@@ -263,5 +287,32 @@ mod spec {
             "[line 1] Error at end: Expect \';\' after value.\n"
         );
         assert_eq!(run("print"), "[line 1] Error at end: Expect expression\n");
+    }
+
+    #[test]
+    fn global_vars() {
+        assert_eq!(
+            run("var a = 1;
+                var b = 2;
+                print a + b;"),
+            "3\n"
+        );
+        assert_eq!(
+            run("var a;
+                print a;"),
+            "nil\n"
+        );
+        assert_eq!(
+            run("print a;
+                 var a = \"too late!\";"),
+            "[line 1] Undefined variable \'a\'.\n"
+        );
+        assert_eq!(
+            run("var a = 1;
+                 print a; // 1.
+                 var a = true;
+                 print a; // true."),
+            "1\ntrue\n"
+        );
     }
 }

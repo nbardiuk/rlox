@@ -1,4 +1,4 @@
-use crate::interpreter::interpret;
+use crate::interpreter::Interpreter;
 use crate::interpreter::RuntimeError;
 use crate::parser::Parser;
 use crate::scanner::Scanner;
@@ -44,7 +44,7 @@ impl<W: Write> Lox<W> {
         let tokens = scanner.scan_tokens(self);
         let mut parser = Parser::new(self, tokens);
         let statements = parser.parse();
-        interpret(self, statements)
+        Interpreter::new().interpret(self, statements);
     }
 
     pub fn run_file(&mut self, path: &str) -> io::Result<()> {
