@@ -9,7 +9,6 @@ use std::result::Result::{Err, Ok};
 #[derive(Default)]
 pub struct Interpreter {
     environment: Environment,
-    //TODO extract lox to field
 }
 
 impl Interpreter {

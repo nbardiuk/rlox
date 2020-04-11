@@ -39,26 +39,28 @@ impl Lox<Vec<u8>> {
 }
 
 impl<W: Write> Lox<W> {
-    fn run(&mut self, source: &str) {
+    fn run(&mut self, interpreter: &mut Interpreter, source: &str) {
         let mut scanner = Scanner::new(source);
         let tokens = scanner.scan_tokens(self);
         let mut parser = Parser::new(self, tokens);
         let statements = parser.parse();
-        Interpreter::new().interpret(self, statements);
+        interpreter.interpret(self, statements);
     }
 
     pub fn run_file(&mut self, path: &str) -> io::Result<()> {
-        self.run(&fs::read_to_string(path)?);
+        let mut interpreter = Interpreter::new();
+        self.run(&mut interpreter, &fs::read_to_string(path)?);
         if self.has_error {
             process::exit(65)
         };
         if self.has_runtime_error {
             process::exit(70)
         };
-        io::Result::Ok(())
+        Ok(())
     }
 
     pub fn run_prompt(&mut self) -> io::Result<()> {
+        let mut interpreter = Interpreter::new();
         loop {
             self.print("> ")?;
             self.out.flush()?;
@@ -66,7 +68,7 @@ impl<W: Write> Lox<W> {
             let mut input = String::new();
             io::stdin().read_line(&mut input)?;
 
-            self.run(&input);
+            self.run(&mut interpreter, &input);
             self.has_error = false;
         }
     }
