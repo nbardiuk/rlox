@@ -22,6 +22,9 @@ fn execute<W: Write>(lox: &mut Lox<W>, stmt: &Stmt) -> Result<(), RuntimeError> 
             lox.println(&val.to_string());
             Ok(())
         }
+        Var(_, _) => {
+            Ok(()) // TODO store var value
+        }
     }
 }
 
@@ -49,6 +52,7 @@ fn evaluate(expr: &Expr) -> Result<token::Literal, RuntimeError> {
             (t::Plus, _, _) => err(op, "Operands must be two numbers or two strings"),
             _ => err(op, "Operands must be numbers"),
         },
+        Variable(_) => Ok(Nil), // TODO read variable value
     }
 }
 

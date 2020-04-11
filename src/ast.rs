@@ -9,6 +9,15 @@ use std::result::Result;
 pub enum Stmt {
     Expression(Rc<Expr>),
     Print(Rc<Expr>),
+    Var(Token, Rc<Expr>),
+}
+
+pub enum Expr {
+    Unary(Token, Rc<Expr>),
+    Binary(Rc<Expr>, Token, Rc<Expr>),
+    Grouping(Rc<Expr>),
+    Literal(Literal),
+    Variable(Token),
 }
 
 impl Display for Stmt {
@@ -17,16 +26,9 @@ impl Display for Stmt {
         match self {
             Expression(expression) => write!(f, "(expr {})", expression),
             Print(expression) => write!(f, "(print {})", expression),
+            Var(name, initializer) => write!(f, "(def {} {})", name.lexeme, initializer),
         }
     }
-}
-
-#[derive(Clone)]
-pub enum Expr {
-    Unary(Token, Rc<Expr>),
-    Binary(Rc<Expr>, Token, Rc<Expr>),
-    Grouping(Rc<Expr>),
-    Literal(Literal),
 }
 
 impl Display for Expr {
@@ -37,6 +39,7 @@ impl Display for Expr {
             Binary(left, operator, right) => write!(f, "({} {} {})", operator.lexeme, left, right),
             Grouping(expression) => write!(f, "(group {})", expression),
             Literal(value) => write!(f, "{}", value),
+            Variable(name) => write!(f, "{}", name.lexeme),
         }
     }
 }
@@ -48,19 +51,19 @@ mod spec {
     #[test]
     fn display_expr() {
         use crate::token::Literal::*;
-        use crate::token::TokenType::{Minus, Star};
+        use crate::token::TokenType::{Identifier, Minus, Star};
         use Expr::*;
 
         let expression = Binary(
             Rc::new(Unary(
                 Token::new(Minus, "-", Nil, 1),
-                Rc::new(Literal(Number(123.))),
+                Rc::new(Variable(Token::new(Identifier, "varname", Nil, 1))),
             )),
             Token::new(Star, "*", Nil, 1),
             Rc::new(Grouping(Rc::new(Literal(Number(45.67))))),
         );
 
-        assert_eq!(expression.to_string(), "(* (- 123) (group 45.67))");
+        assert_eq!(expression.to_string(), "(* (- varname) (group 45.67))");
     }
 
     #[test]
@@ -91,5 +94,20 @@ mod spec {
         )));
 
         assert_eq!(expression.to_string(), "(print (- 123))");
+    }
+
+    #[test]
+    fn display_var() {
+        use crate::token::Literal::*;
+        use crate::token::TokenType::Identifier;
+        use Expr::*;
+        use Stmt::*;
+
+        let expression = Var(
+            Token::new(Identifier, "varname", Nil, 1),
+            Rc::new(Literal(Number(42.))),
+        );
+
+        assert_eq!(expression.to_string(), "(def varname 42)");
     }
 }
