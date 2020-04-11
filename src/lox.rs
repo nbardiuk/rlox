@@ -43,7 +43,7 @@ impl<W: Write> Lox<W> {
         let mut scanner = Scanner::new(source);
         let tokens = scanner.scan_tokens(self);
         let mut parser = Parser::new(self, tokens);
-        if let Some(expr) = parser.parse() {
+        if let Ok(expr) = parser.expression() {
             interpret(self, expr)
         } else {
             Result::Ok(())

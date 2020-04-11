@@ -1,11 +1,13 @@
 use crate::ast::Expr;
+use crate::ast::Stmt;
 use crate::lox::Lox;
 use crate::token::Token;
 use crate::token::TokenType;
 use std::io::Write;
 use std::rc::Rc;
 
-struct ParserError {}
+#[derive(Debug)]
+pub struct ParserError {}
 
 pub struct Parser<'a, W: Write> {
     tokens: Vec<Token>,
@@ -22,11 +24,39 @@ impl<'a, W: Write> Parser<'a, W> {
         }
     }
 
-    pub fn parse(&mut self) -> Option<Expr> {
-        self.expression().ok()
+    pub fn parse(&mut self) -> Vec<Stmt> {
+        let mut statements = vec![];
+        while !self.is_at_end() {
+            statements.push(self.statement());
+        }
+        statements
     }
 
-    fn expression(&mut self) -> Result<Expr, ParserError> {
+    fn statement(&mut self) -> Stmt {
+        use TokenType::*;
+        if self.matches(&[Print]) {
+            self.print_statement()
+        } else {
+            self.expression_statement()
+        }
+    }
+
+    fn print_statement(&mut self) -> Stmt {
+        use TokenType::*;
+        let value = self.expression().unwrap(); // FIXME add error handling
+        self.consume(Semicolon, "Expect ';' after value.").unwrap();
+        Stmt::Print(Rc::new(value))
+    }
+
+    fn expression_statement(&mut self) -> Stmt {
+        use TokenType::*;
+        let value = self.expression().unwrap(); // FIXME add error handling
+        self.consume(Semicolon, "Expect ';' after value.").unwrap();
+        Stmt::Expression(Rc::new(value))
+    }
+
+    // FIXME temporaryr public
+    pub fn expression(&mut self) -> Result<Expr, ParserError> {
         self.equality()
     }
 
@@ -171,12 +201,34 @@ mod spec {
     use super::*;
     use crate::scanner::Scanner;
 
+    fn parse<'a>(source: &'a str) -> Vec<String> {
+        let mut lox = Lox::<Vec<u8>>::new();
+        let mut scanner = Scanner::new(source);
+        let tokens = scanner.scan_tokens(&mut lox);
+        let mut parser = Parser::new(&mut lox, tokens);
+        let mut tree = parser
+            .parse()
+            .iter()
+            .map(|p| p.to_string())
+            .collect::<Vec<_>>();
+        let mut output = lox
+            .output()
+            .lines()
+            .map(|s| s.to_string())
+            .collect::<Vec<_>>();
+        output.append(&mut tree);
+        output
+    }
+
     fn tree<'a>(source: &'a str) -> String {
         let mut lox = Lox::<Vec<u8>>::new();
         let mut scanner = Scanner::new(source);
         let tokens = scanner.scan_tokens(&mut lox);
         let mut parser = Parser::new(&mut lox, tokens);
-        let tree = parser.parse().map(|e| e.to_string()).unwrap_or_default();
+        let tree = parser
+            .expression()
+            .map(|e| e.to_string())
+            .unwrap_or_default();
         format!("{}{}", lox.output(), tree)
     }
 
@@ -320,6 +372,24 @@ mod spec {
         assert_eq!(
             tree("(1"),
             "[line 1] Error at end: Expect \')\' after expression\n"
+        );
+    }
+
+    #[test]
+    fn expression() {
+        assert_eq!(parse("1!=2;"), vec!["(expr (!= 1 2))"]);
+        assert_eq!(
+            parse("1+1;\n2-3;"),
+            vec!["(expr (+ 1 1))", "(expr (- 2 3))"]
+        );
+    }
+
+    #[test]
+    fn print() {
+        assert_eq!(parse("print 1!=2;"), vec!["(print (!= 1 2))"]);
+        assert_eq!(
+            parse("print 1;print 2-3;"),
+            vec!["(print 1)", "(print (- 2 3))"]
         );
     }
 }

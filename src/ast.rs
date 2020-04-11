@@ -6,7 +6,7 @@ use std::fmt::Formatter;
 use std::rc::Rc;
 use std::result::Result;
 
-enum Stmt {
+pub enum Stmt {
     Expression(Rc<Expr>),
     Print(Rc<Expr>),
 }
