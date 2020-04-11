@@ -88,7 +88,22 @@ impl<'a, W: Write> Parser<'a, W> {
     }
 
     fn expression(&mut self) -> Result<Expr, ParserError> {
-        self.equality()
+        self.assignment()
+    }
+
+    fn assignment(&mut self) -> Result<Expr, ParserError> {
+        use TokenType::*;
+        let expr = self.equality()?;
+
+        if self.matches(&[Equal]) {
+            if let Expr::Variable(name) = expr {
+                Ok(Expr::Asign(name, Rc::new(self.assignment()?)))
+            } else {
+                self.error(self.previous(), "Invalid assignment target.")
+            }
+        } else {
+            Ok(expr)
+        }
     }
 
     fn equality(&mut self) -> Result<Expr, ParserError> {
@@ -534,6 +549,42 @@ mod spec {
                 "(def snake_case true)",
                 "(def camelCase true)",
                 "(def _0name true)"
+            ]
+        );
+    }
+
+    #[test]
+    fn assignmen_var() {
+        assert_eq!(
+            parse("a=1; b=1>2; a=a;"),
+            vec![
+                "(expr (set! a 1))",
+                "(expr (set! b (> 1 2)))",
+                "(expr (set! a a))"
+            ]
+        );
+        assert_eq!(parse("a = b = c;"), vec!["(expr (set! a (set! b c)))"]);
+        assert_eq!(
+            parse(
+                "a + (b = 1);
+                 (a = 1) + b;"
+            ),
+            vec![
+                "(expr (+ a (group (set! b 1))))",
+                "(expr (+ (group (set! a 1)) b))"
+            ]
+        );
+        assert_eq!(
+            parse(
+                "1 = a;
+                 \"a\" = 1;
+                 a = 1 = b;
+                "
+            ),
+            vec![
+                "[line 1] Error at \'=\': Invalid assignment target.",
+                "[line 2] Error at \'=\': Invalid assignment target.",
+                "[line 3] Error at \'=\': Invalid assignment target."
             ]
         );
     }

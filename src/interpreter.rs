@@ -46,6 +46,7 @@ impl Interpreter {
         match expr {
             Literal(value) => Ok(value.clone()),
             Variable(name) => self.environment.get(name),
+            Asign(_,_) => Ok(Nil), // TODO update environment
             Grouping(expression) => self.evaluate(&expression),
             Unary(op, right) => match (op.typ, self.evaluate(right)?) {
                 (t::Bang, r) => Ok(Bool(!is_truthy(r))),

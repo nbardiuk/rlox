@@ -14,6 +14,7 @@ pub enum Stmt {
 
 pub enum Expr {
     Unary(Token, Rc<Expr>),
+    Asign(Token, Rc<Expr>),
     Binary(Rc<Expr>, Token, Rc<Expr>),
     Grouping(Rc<Expr>),
     Literal(Literal),
@@ -37,6 +38,7 @@ impl Display for Expr {
         use Expr::*;
         match self {
             Unary(operator, right) => write!(f, "({} {})", operator.lexeme, right),
+            Asign(name, value) => write!(f, "(set! {} {})", name.lexeme, value),
             Binary(left, operator, right) => write!(f, "({} {} {})", operator.lexeme, left, right),
             Grouping(expression) => write!(f, "(group {})", expression),
             Literal(value) => write!(f, "{}", value),
@@ -112,5 +114,19 @@ mod spec {
 
         let expression = Var(Token::new(Identifier, "another", Nil, 1), None);
         assert_eq!(expression.to_string(), "(def another)");
+    }
+
+    #[test]
+    fn display_assign() {
+        use crate::token::Literal::*;
+        use crate::token::TokenType::Identifier;
+        use Expr::*;
+
+        let expression = Asign(
+            Token::new(Identifier, "varname", Nil, 1),
+            Rc::new(Literal(Number(42.))),
+        );
+
+        assert_eq!(expression.to_string(), "(set! varname 42)");
     }
 }
