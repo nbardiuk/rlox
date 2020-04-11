@@ -26,13 +26,42 @@ impl<'a, W: Write> Parser<'a, W> {
 
     pub fn parse(&mut self) -> Vec<Stmt> {
         let mut statements = vec![];
-        // FIXME infinite loop when missing ';'
         while !self.is_at_end() {
-            if let Ok(statement) = self.statement() {
+            if let Some(statement) = self.declaration() {
                 statements.push(statement);
             }
         }
         statements
+    }
+
+    fn declaration(&mut self) -> Option<Stmt> {
+        use TokenType::*;
+        let statement = if self.matches(&[Var]) {
+            self.var_declaration()
+        } else {
+            self.statement()
+        };
+
+        if statement.is_err() {
+            self.syncronize();
+        }
+
+        statement.ok()
+    }
+
+    fn var_declaration(&mut self) -> Result<Stmt, ParserError> {
+        use TokenType::*;
+        let name = self.consume(Identifier, "Expect variable name.")?;
+
+        let initializer = if self.matches(&[Equal]) {
+            Some(Rc::new(self.expression()?))
+        } else {
+            None
+        };
+
+        self.consume(Semicolon, "Expect ';' after variable declaration")?;
+
+        Ok(Stmt::Var(name, initializer))
     }
 
     fn statement(&mut self) -> Result<Stmt, ParserError> {
@@ -72,7 +101,7 @@ impl<'a, W: Write> Parser<'a, W> {
             expr = Expr::Binary(Rc::new(expr), operator, Rc::new(right));
         }
 
-        Result::Ok(expr)
+        Ok(expr)
     }
 
     fn comparison(&mut self) -> Result<Expr, ParserError> {
@@ -85,7 +114,7 @@ impl<'a, W: Write> Parser<'a, W> {
             expr = Expr::Binary(Rc::new(expr), operator, Rc::new(right));
         }
 
-        Result::Ok(expr)
+        Ok(expr)
     }
 
     fn addition(&mut self) -> Result<Expr, ParserError> {
@@ -98,7 +127,7 @@ impl<'a, W: Write> Parser<'a, W> {
             expr = Expr::Binary(Rc::new(expr), operator, Rc::new(right));
         }
 
-        Result::Ok(expr)
+        Ok(expr)
     }
 
     fn multiplication(&mut self) -> Result<Expr, ParserError> {
@@ -111,7 +140,7 @@ impl<'a, W: Write> Parser<'a, W> {
             expr = Expr::Binary(Rc::new(expr), operator, Rc::new(right));
         }
 
-        Result::Ok(expr)
+        Ok(expr)
     }
 
     fn unary(&mut self) -> Result<Expr, ParserError> {
@@ -119,7 +148,7 @@ impl<'a, W: Write> Parser<'a, W> {
         if self.matches(&[Bang, Minus]) {
             let operator = self.previous();
             let right = self.unary()?;
-            return Result::Ok(Expr::Unary(operator, Rc::new(right)));
+            return Ok(Expr::Unary(operator, Rc::new(right)));
         }
         self.primary()
     }
@@ -127,17 +156,20 @@ impl<'a, W: Write> Parser<'a, W> {
     fn primary(&mut self) -> Result<Expr, ParserError> {
         use TokenType::*;
         if self.matches(&[False, True, Nil, Number, String]) {
-            return Result::Ok(Expr::Literal(self.previous().literal));
+            return Ok(Expr::Literal(self.previous().literal));
         }
         if self.matches(&[LeftParen]) {
             let expr = self.expression()?;
             self.consume(RightParen, "Expect ')' after expression")?;
-            return Result::Ok(Expr::Grouping(Rc::new(expr)));
+            return Ok(Expr::Grouping(Rc::new(expr)));
+        }
+        if self.matches(&[Identifier]) {
+            return Ok(Expr::Variable(self.previous()));
         }
         self.error(self.peek(), "Expect expression")
     }
 
-    fn _syncronize(&mut self) {
+    fn syncronize(&mut self) {
         use TokenType::*;
         self.advance();
         while !self.is_at_end() {
@@ -154,14 +186,14 @@ impl<'a, W: Write> Parser<'a, W> {
 
     fn consume(&mut self, typ: TokenType, message: &'a str) -> Result<Token, ParserError> {
         if self.check(typ) {
-            return Result::Ok(self.advance());
+            return Ok(self.advance());
         }
         self.error(self.peek(), message)
     }
 
     fn error<T>(&mut self, token: Token, message: &'a str) -> Result<T, ParserError> {
         self.lox.error_token(token, message);
-        Result::Err(ParserError {})
+        Err(ParserError {})
     }
 
     fn previous(&self) -> Token {
@@ -201,44 +233,35 @@ impl<'a, W: Write> Parser<'a, W> {
 #[cfg(test)]
 mod spec {
     use super::*;
-    use crate::scanner::Scanner;
 
     fn parse<'a>(source: &'a str) -> Vec<String> {
+        use crate::scanner::Scanner;
         let mut lox = Lox::<Vec<u8>>::new();
         let mut scanner = Scanner::new(source);
         let tokens = scanner.scan_tokens(&mut lox);
+
         let mut parser = Parser::new(&mut lox, tokens);
         let mut tree = parser
             .parse()
             .iter()
             .map(|p| p.to_string())
             .collect::<Vec<_>>();
+
         let mut output = lox
             .output()
             .lines()
             .map(|s| s.to_string())
             .collect::<Vec<_>>();
+
         output.append(&mut tree);
         output
-    }
-
-    fn tree<'a>(source: &'a str) -> String {
-        let mut lox = Lox::<Vec<u8>>::new();
-        let mut scanner = Scanner::new(source);
-        let tokens = scanner.scan_tokens(&mut lox);
-        let mut parser = Parser::new(&mut lox, tokens);
-        let tree = parser
-            .expression()
-            .map(|e| e.to_string())
-            .unwrap_or_default();
-        format!("{}{}", lox.output(), tree)
     }
 
     #[test]
     fn not_expression() {
         assert_eq!(
-            tree("anything\nnot valid"),
-            "[line 1] Error at \'anything\': Expect expression\n"
+            parse("anything\nnot valid"),
+            vec!["[line 2] Error at \'not\': Expect \';\' after value."]
         );
     }
 
@@ -249,6 +272,7 @@ mod spec {
         assert_eq!(parse("true;"), vec!["(expr true)"]);
         assert_eq!(parse("false;"), vec!["(expr false)"]);
         assert_eq!(parse("nil;"), vec!["(expr nil)"]);
+        assert_eq!(parse("variable_name;"), vec!["(expr variable_name)"]);
     }
 
     #[test]
@@ -268,8 +292,14 @@ mod spec {
         assert_eq!(parse("2/-3;"), vec!["(expr (/ 2 (- 3)))"]);
         assert_eq!(parse("-4/2;"), vec!["(expr (/ (- 4) 2))"]);
         assert_eq!(parse("1/2/3;"), vec!["(expr (/ (/ 1 2) 3))"]);
-        assert_eq!(tree("1/"), "[line 1] Error at end: Expect expression\n");
-        assert_eq!(tree("/1"), "[line 1] Error at \'/\': Expect expression\n");
+        assert_eq!(
+            parse("1/"),
+            vec!["[line 1] Error at end: Expect expression"]
+        );
+        assert_eq!(
+            parse("/1"),
+            vec!["[line 1] Error at \'/\': Expect expression"]
+        );
     }
 
     #[test]
@@ -277,8 +307,14 @@ mod spec {
         assert_eq!(parse("2*-3;"), vec!["(expr (* 2 (- 3)))"]);
         assert_eq!(parse("-4*2;"), vec!["(expr (* (- 4) 2))"]);
         assert_eq!(parse("1*2*3;"), vec!["(expr (* (* 1 2) 3))"]);
-        assert_eq!(tree("1*"), "[line 1] Error at end: Expect expression\n");
-        assert_eq!(tree("*1"), "[line 1] Error at \'*\': Expect expression\n");
+        assert_eq!(
+            parse("1*"),
+            vec!["[line 1] Error at end: Expect expression"]
+        );
+        assert_eq!(
+            parse("*1"),
+            vec!["[line 1] Error at \'*\': Expect expression"]
+        );
     }
 
     #[test]
@@ -296,8 +332,14 @@ mod spec {
         assert_eq!(parse("1+2+3;"), vec!["(expr (+ (+ 1 2) 3))"]);
         assert_eq!(parse("1*2 + 3*4;"), vec!["(expr (+ (* 1 2) (* 3 4)))"]);
         assert_eq!(parse("1 + 2/3 + 4;"), vec!["(expr (+ (+ 1 (/ 2 3)) 4))"]);
-        assert_eq!(tree("1+"), "[line 1] Error at end: Expect expression\n");
-        assert_eq!(tree("+1"), "[line 1] Error at \'+\': Expect expression\n");
+        assert_eq!(
+            parse("1+"),
+            vec!["[line 1] Error at end: Expect expression"]
+        );
+        assert_eq!(
+            parse("+1"),
+            vec!["[line 1] Error at \'+\': Expect expression"]
+        );
     }
 
     #[test]
@@ -307,7 +349,10 @@ mod spec {
         assert_eq!(parse("1-2-3;"), vec!["(expr (- (- 1 2) 3))"]);
         assert_eq!(parse("1*2 - 3*4;"), vec!["(expr (- (* 1 2) (* 3 4)))"]);
         assert_eq!(parse("1 - 2/3 - 4;"), vec!["(expr (- (- 1 (/ 2 3)) 4))"]);
-        assert_eq!(tree("1-"), "[line 1] Error at end: Expect expression\n");
+        assert_eq!(
+            parse("1-"),
+            vec!["[line 1] Error at end: Expect expression"]
+        );
     }
 
     #[test]
@@ -315,8 +360,14 @@ mod spec {
         assert_eq!(parse("1>2;"), vec!["(expr (> 1 2))"]);
         assert_eq!(parse("1>2>3;"), vec!["(expr (> (> 1 2) 3))"]);
         assert_eq!(parse("1+2>3*4;"), vec!["(expr (> (+ 1 2) (* 3 4)))"]);
-        assert_eq!(tree("1>"), "[line 1] Error at end: Expect expression\n");
-        assert_eq!(tree(">1"), "[line 1] Error at \'>\': Expect expression\n");
+        assert_eq!(
+            parse("1>"),
+            vec!["[line 1] Error at end: Expect expression"]
+        );
+        assert_eq!(
+            parse(">1"),
+            vec!["[line 1] Error at \'>\': Expect expression"]
+        );
     }
 
     #[test]
@@ -324,8 +375,14 @@ mod spec {
         assert_eq!(parse("1>=2;"), vec!["(expr (>= 1 2))"]);
         assert_eq!(parse("1>=2>=3;"), vec!["(expr (>= (>= 1 2) 3))"]);
         assert_eq!(parse("1+2>=3*4;"), vec!["(expr (>= (+ 1 2) (* 3 4)))"]);
-        assert_eq!(tree("1>="), "[line 1] Error at end: Expect expression\n");
-        assert_eq!(tree(">=1"), "[line 1] Error at \'>=\': Expect expression\n");
+        assert_eq!(
+            parse("1>="),
+            vec!["[line 1] Error at end: Expect expression"]
+        );
+        assert_eq!(
+            parse(">=1"),
+            vec!["[line 1] Error at \'>=\': Expect expression"]
+        );
     }
 
     #[test]
@@ -333,8 +390,14 @@ mod spec {
         assert_eq!(parse("1<2;"), vec!["(expr (< 1 2))"]);
         assert_eq!(parse("1<2<3;"), vec!["(expr (< (< 1 2) 3))"]);
         assert_eq!(parse("1+2<3*4;"), vec!["(expr (< (+ 1 2) (* 3 4)))"]);
-        assert_eq!(tree("1<"), "[line 1] Error at end: Expect expression\n");
-        assert_eq!(tree("<1"), "[line 1] Error at \'<\': Expect expression\n");
+        assert_eq!(
+            parse("1<"),
+            vec!["[line 1] Error at end: Expect expression"]
+        );
+        assert_eq!(
+            parse("<1"),
+            vec!["[line 1] Error at \'<\': Expect expression"]
+        );
     }
 
     #[test]
@@ -342,8 +405,14 @@ mod spec {
         assert_eq!(parse("1<=2;"), vec!["(expr (<= 1 2))"]);
         assert_eq!(parse("1<=2<=3;"), vec!["(expr (<= (<= 1 2) 3))"]);
         assert_eq!(parse("1+2<=3*4;"), vec!["(expr (<= (+ 1 2) (* 3 4)))"]);
-        assert_eq!(tree("1<="), "[line 1] Error at end: Expect expression\n");
-        assert_eq!(tree("<=1"), "[line 1] Error at \'<=\': Expect expression\n");
+        assert_eq!(
+            parse("1<="),
+            vec!["[line 1] Error at end: Expect expression"]
+        );
+        assert_eq!(
+            parse("<=1"),
+            vec!["[line 1] Error at \'<=\': Expect expression"]
+        );
     }
 
     #[test]
@@ -354,8 +423,14 @@ mod spec {
             parse("1+2==3<=4==5*6;"),
             vec!["(expr (== (== (+ 1 2) (<= 3 4)) (* 5 6)))"]
         );
-        assert_eq!(tree("1=="), "[line 1] Error at end: Expect expression\n");
-        assert_eq!(tree("==1"), "[line 1] Error at \'==\': Expect expression\n");
+        assert_eq!(
+            parse("1=="),
+            vec!["[line 1] Error at end: Expect expression"]
+        );
+        assert_eq!(
+            parse("==1"),
+            vec!["[line 1] Error at \'==\': Expect expression"]
+        );
     }
 
     #[test]
@@ -366,8 +441,14 @@ mod spec {
             parse("1+2!=3<=4!=5*6;"),
             vec!["(expr (!= (!= (+ 1 2) (<= 3 4)) (* 5 6)))"]
         );
-        assert_eq!(tree("1!="), "[line 1] Error at end: Expect expression\n");
-        assert_eq!(tree("!=1"), "[line 1] Error at \'!=\': Expect expression\n");
+        assert_eq!(
+            parse("1!="),
+            vec!["[line 1] Error at end: Expect expression"]
+        );
+        assert_eq!(
+            parse("!=1"),
+            vec!["[line 1] Error at \'!=\': Expect expression"]
+        );
     }
 
     #[test]
@@ -377,12 +458,18 @@ mod spec {
         assert_eq!(parse("1 / (2 - 3);"), vec!["(expr (/ 1 (group (- 2 3))))"]);
         assert_eq!(parse("-(1 - 2);"), vec!["(expr (- (group (- 1 2))))"]);
         assert_eq!(parse("!(1 >= 2);"), vec!["(expr (! (group (>= 1 2))))"]);
-        assert_eq!(tree("("), "[line 1] Error at end: Expect expression\n");
-        assert_eq!(tree(")"), "[line 1] Error at \')\': Expect expression\n");
-        assert_eq!(tree("1)"), "1"); // TODO unmatched closing paren is ignored
+        assert_eq!(parse("("), vec!["[line 1] Error at end: Expect expression"]);
         assert_eq!(
-            tree("(1"),
-            "[line 1] Error at end: Expect \')\' after expression\n"
+            parse(")"),
+            vec!["[line 1] Error at \')\': Expect expression"]
+        );
+        assert_eq!(
+            parse("1)"),
+            vec!["[line 1] Error at \')\': Expect \';\' after value."]
+        );
+        assert_eq!(
+            parse("(1"),
+            vec!["[line 1] Error at end: Expect \')\' after expression"]
         );
     }
 
@@ -422,6 +509,31 @@ mod spec {
             vec![
                 "[line 1] Error at end: Expect \';\' after value.",
                 "(print 1)"
+            ]
+        );
+    }
+
+    #[test]
+    fn declaration_var() {
+        assert_eq!(
+            parse("var a = 1; var b = 1 > 2; var n;"),
+            vec!["(def a 1)", "(def b (> 1 2))", "(def n)"]
+        );
+        assert_eq!(
+            parse(
+                "var snake_case = true;
+                var lisp-case = false;
+                var camelCase = true;
+                var 0name = false;
+                var _0name = true;
+                "
+            ),
+            vec![
+                "[line 2] Error at \'-\': Expect \';\' after variable declaration",
+                "[line 4] Error at \'0\': Expect variable name.",
+                "(def snake_case true)",
+                "(def camelCase true)",
+                "(def _0name true)"
             ]
         );
     }

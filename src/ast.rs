@@ -9,7 +9,7 @@ use std::result::Result;
 pub enum Stmt {
     Expression(Rc<Expr>),
     Print(Rc<Expr>),
-    Var(Token, Rc<Expr>),
+    Var(Token, Option<Rc<Expr>>),
 }
 
 pub enum Expr {
@@ -26,7 +26,8 @@ impl Display for Stmt {
         match self {
             Expression(expression) => write!(f, "(expr {})", expression),
             Print(expression) => write!(f, "(print {})", expression),
-            Var(name, initializer) => write!(f, "(def {} {})", name.lexeme, initializer),
+            Var(name, Some(initializer)) => write!(f, "(def {} {})", name.lexeme, initializer),
+            Var(name, None) => write!(f, "(def {})", name.lexeme),
         }
     }
 }
@@ -105,9 +106,11 @@ mod spec {
 
         let expression = Var(
             Token::new(Identifier, "varname", Nil, 1),
-            Rc::new(Literal(Number(42.))),
+            Some(Rc::new(Literal(Number(42.)))),
         );
-
         assert_eq!(expression.to_string(), "(def varname 42)");
+
+        let expression = Var(Token::new(Identifier, "another", Nil, 1), None);
+        assert_eq!(expression.to_string(), "(def another)");
     }
 }
