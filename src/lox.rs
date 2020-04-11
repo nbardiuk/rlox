@@ -43,11 +43,8 @@ impl<W: Write> Lox<W> {
         let mut scanner = Scanner::new(source);
         let tokens = scanner.scan_tokens(self);
         let mut parser = Parser::new(self, tokens);
-        if let Ok(expr) = parser.expression() {
-            interpret(self, expr)
-        } else {
-            Result::Ok(())
-        }
+        let statements = parser.parse();
+        interpret(self, statements)
     }
 
     pub fn run_file(&mut self, path: &str) -> io::Result<()> {

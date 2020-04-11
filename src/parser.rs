@@ -7,7 +7,7 @@ use std::io::Write;
 use std::rc::Rc;
 
 #[derive(Debug)]
-pub struct ParserError {}
+struct ParserError {}
 
 pub struct Parser<'a, W: Write> {
     tokens: Vec<Token>,
@@ -27,12 +27,14 @@ impl<'a, W: Write> Parser<'a, W> {
     pub fn parse(&mut self) -> Vec<Stmt> {
         let mut statements = vec![];
         while !self.is_at_end() {
-            statements.push(self.statement());
+            if let Ok(statement) = self.statement() {
+                statements.push(statement);
+            }
         }
         statements
     }
 
-    fn statement(&mut self) -> Stmt {
+    fn statement(&mut self) -> Result<Stmt, ParserError> {
         use TokenType::*;
         if self.matches(&[Print]) {
             self.print_statement()
@@ -41,22 +43,21 @@ impl<'a, W: Write> Parser<'a, W> {
         }
     }
 
-    fn print_statement(&mut self) -> Stmt {
+    fn print_statement(&mut self) -> Result<Stmt, ParserError> {
         use TokenType::*;
-        let value = self.expression().unwrap(); // FIXME add error handling
-        self.consume(Semicolon, "Expect ';' after value.").unwrap();
-        Stmt::Print(Rc::new(value))
+        let value = self.expression()?;
+        self.consume(Semicolon, "Expect ';' after value.")?;
+        Ok(Stmt::Print(Rc::new(value)))
     }
 
-    fn expression_statement(&mut self) -> Stmt {
+    fn expression_statement(&mut self) -> Result<Stmt, ParserError> {
         use TokenType::*;
-        let value = self.expression().unwrap(); // FIXME add error handling
-        self.consume(Semicolon, "Expect ';' after value.").unwrap();
-        Stmt::Expression(Rc::new(value))
+        let value = self.expression()?;
+        self.consume(Semicolon, "Expect ';' after value.")?;
+        Ok(Stmt::Expression(Rc::new(value)))
     }
 
-    // FIXME temporaryr public
-    pub fn expression(&mut self) -> Result<Expr, ParserError> {
+    fn expression(&mut self) -> Result<Expr, ParserError> {
         self.equality()
     }
 
@@ -382,6 +383,17 @@ mod spec {
             parse("1+1;\n2-3;"),
             vec!["(expr (+ 1 1))", "(expr (- 2 3))"]
         );
+        assert_eq!(
+            parse("1"),
+            vec!["[line 1] Error at end: Expect \';\' after value."]
+        );
+        assert_eq!(
+            parse("1;2"),
+            vec![
+                "[line 1] Error at end: Expect \';\' after value.",
+                "(expr 1)"
+            ]
+        );
     }
 
     #[test]
@@ -390,6 +402,17 @@ mod spec {
         assert_eq!(
             parse("print 1;print 2-3;"),
             vec!["(print 1)", "(print (- 2 3))"]
+        );
+        assert_eq!(
+            parse("print"),
+            vec!["[line 1] Error at end: Expect expression"]
+        );
+        assert_eq!(
+            parse("print 1;2"),
+            vec![
+                "[line 1] Error at end: Expect \';\' after value.",
+                "(print 1)"
+            ]
         );
     }
 }
