@@ -2,17 +2,16 @@ use crate::ast::Expr::{self, *};
 use crate::ast::Stmt::{self, *};
 use crate::lox::Lox;
 use crate::token::{self, Literal::*, Token, TokenType as t};
-use std::io::{self, Write};
+use std::io::Write;
 use std::result::Result::{Err, Ok};
 
-pub fn interpret<W: Write>(lox: &mut Lox<W>, statements: Vec<Stmt>) -> io::Result<()> {
+pub fn interpret<W: Write>(lox: &mut Lox<W>, statements: Vec<Stmt>) {
     for stmt in statements {
         if let Err(e) = execute(lox, &stmt) {
-            lox.runtime_error(e)?;
+            lox.runtime_error(e);
             break;
         }
     }
-    Ok(())
 }
 
 fn execute<W: Write>(lox: &mut Lox<W>, stmt: &Stmt) -> Result<(), RuntimeError> {
@@ -20,7 +19,7 @@ fn execute<W: Write>(lox: &mut Lox<W>, stmt: &Stmt) -> Result<(), RuntimeError> 
         Expression(expression) => evaluate(expression).map(|_| ()),
         Print(expression) => {
             let val = evaluate(expression)?;
-            lox.println(&val.to_string()).unwrap(); // FIXME handle errors
+            lox.println(&val.to_string());
             Ok(())
         }
     }
@@ -86,7 +85,7 @@ mod spec {
         let tokens = scanner.scan_tokens(&mut lox);
         let mut parser = Parser::new(&mut lox, tokens);
         let statements = parser.parse();
-        interpret(&mut lox, statements).unwrap();
+        interpret(&mut lox, statements);
         lox.output()
     }
 
