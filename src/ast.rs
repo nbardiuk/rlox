@@ -6,6 +6,21 @@ use std::fmt::Formatter;
 use std::rc::Rc;
 use std::result::Result;
 
+enum Stmt {
+    Expression(Rc<Expr>),
+    Print(Rc<Expr>),
+}
+
+impl Display for Stmt {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
+        use Stmt::*;
+        match self {
+            Expression(expression) => write!(f, "(expr {})", expression),
+            Print(expression) => write!(f, "(print {})", expression),
+        }
+    }
+}
+
 #[derive(Clone)]
 pub enum Expr {
     Unary(Token, Rc<Expr>),
@@ -31,7 +46,7 @@ mod spec {
     use super::*;
 
     #[test]
-    fn printing() {
+    fn display_expr() {
         use crate::token::Literal::*;
         use crate::token::TokenType::{Minus, Star};
         use Expr::*;
@@ -46,5 +61,35 @@ mod spec {
         );
 
         assert_eq!(expression.to_string(), "(* (- 123) (group 45.67))");
+    }
+
+    #[test]
+    fn display_expression() {
+        use crate::token::Literal::*;
+        use crate::token::TokenType::Minus;
+        use Expr::*;
+        use Stmt::*;
+
+        let expression = Expression(Rc::new(Unary(
+            Token::new(Minus, "-", Nil, 1),
+            Rc::new(Literal(Number(123.))),
+        )));
+
+        assert_eq!(expression.to_string(), "(expr (- 123))");
+    }
+
+    #[test]
+    fn display_print() {
+        use crate::token::Literal::*;
+        use crate::token::TokenType::Minus;
+        use Expr::*;
+        use Stmt::*;
+
+        let expression = Print(Rc::new(Unary(
+            Token::new(Minus, "-", Nil, 1),
+            Rc::new(Literal(Number(123.))),
+        )));
+
+        assert_eq!(expression.to_string(), "(print (- 123))");
     }
 }
