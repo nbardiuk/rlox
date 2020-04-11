@@ -27,6 +27,7 @@ impl Interpreter {
 
     fn execute<W: Write>(&mut self, lox: &mut Lox<W>, stmt: &Stmt) -> Result<(), RuntimeError> {
         match stmt {
+            Block(statemets) => {} // TODO nest context and eval
             Expression(expression) => {
                 self.evaluate(expression).map(|_| ())?;
             }

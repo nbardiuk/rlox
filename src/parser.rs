@@ -68,9 +68,26 @@ impl<'a, W: Write> Parser<'a, W> {
         use TokenType::*;
         if self.matches(&[Print]) {
             self.print_statement()
+        } else if self.matches(&[LeftBrace]) {
+            Ok(Stmt::Block(self.block()?))
         } else {
             self.expression_statement()
         }
+    }
+
+    fn block(&mut self) -> Result<Vec<Stmt>, ParserError> {
+        use TokenType::*;
+
+        let mut statements = vec![];
+        while !self.check(RightBrace) && !self.is_at_end() {
+            if let Some(statement) = self.declaration() {
+                statements.push(statement);
+            }
+        }
+
+        self.consume(RightBrace, "Expect '}' after block")?;
+
+        Ok(statements)
     }
 
     fn print_statement(&mut self) -> Result<Stmt, ParserError> {
@@ -585,6 +602,26 @@ mod spec {
                 "[line 1] Error at \'=\': Invalid assignment target.",
                 "[line 2] Error at \'=\': Invalid assignment target.",
                 "[line 3] Error at \'=\': Invalid assignment target."
+            ]
+        );
+    }
+
+    #[test]
+    fn blocks() {
+        assert_eq!(parse("{}{}{{}}"), vec!["(do )", "(do )", "(do (do ))"]);
+        assert_eq!(
+            parse("{var a=1;print a;}{a=2;}"),
+            vec!["(do (def a 1) (print a))", "(do (expr (set! a 2)))"]
+        );
+        assert_eq!(
+            parse("a = {b = 1};"),
+            vec!["[line 1] Error at \'{\': Expect expression"]
+        );
+        assert_eq!(
+            parse("{\n{"),
+            vec![
+                "[line 2] Error at end: Expect \'}\' after block",
+                "[line 2] Error at end: Expect \'}\' after block"
             ]
         );
     }

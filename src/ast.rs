@@ -10,6 +10,7 @@ pub enum Stmt {
     Expression(Rc<Expr>),
     Print(Rc<Expr>),
     Var(Token, Option<Rc<Expr>>),
+    Block(Vec<Stmt>),
 }
 
 pub enum Expr {
@@ -26,11 +27,19 @@ impl Display for Stmt {
         use Stmt::*;
         match self {
             Expression(expression) => write!(f, "(expr {})", expression),
+            Block(statemets) => write!(f, "(do {})", join(statemets, " ")),
             Print(expression) => write!(f, "(print {})", expression),
             Var(name, Some(initializer)) => write!(f, "(def {} {})", name.lexeme, initializer),
             Var(name, None) => write!(f, "(def {})", name.lexeme),
         }
     }
+}
+
+fn join<D: Display>(ds: &[D], separator: &str) -> String {
+    ds.iter()
+        .map(|s| s.to_string())
+        .collect::<Vec<_>>()
+        .join(separator)
 }
 
 impl Display for Expr {
@@ -128,5 +137,26 @@ mod spec {
         );
 
         assert_eq!(expression.to_string(), "(set! varname 42)");
+    }
+
+    #[test]
+    fn display_block() {
+        use crate::token::Literal::*;
+        use crate::token::TokenType::Identifier;
+        use Expr::*;
+        use Stmt::*;
+
+        let expression = Block(vec![
+            Expression(Rc::new(Asign(
+                Token::new(Identifier, "varname", Nil, 1),
+                Rc::new(Literal(Number(42.))),
+            ))),
+            Expression(Rc::new(Literal(Bool(false)))),
+        ]);
+
+        assert_eq!(
+            expression.to_string(),
+            "(do (expr (set! varname 42)) (expr false))"
+        );
     }
 }
