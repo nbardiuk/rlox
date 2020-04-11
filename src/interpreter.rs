@@ -35,18 +35,25 @@ impl Interpreter {
                 lox.println(&val.to_string());
             }
             Var(name, initializer) => match initializer {
-                Some(i) => self.environment.define(name, self.evaluate(i)?),
+                Some(i) => {
+                    let value = self.evaluate(i)?;
+                    self.environment.define(name, value)
+                }
                 _ => self.environment.define(name, Nil),
             },
         }
         Ok(())
     }
 
-    fn evaluate(&self, expr: &Expr) -> Result<token::Literal, RuntimeError> {
+    fn evaluate(&mut self, expr: &Expr) -> Result<token::Literal, RuntimeError> {
         match expr {
             Literal(value) => Ok(value.clone()),
             Variable(name) => self.environment.get(name),
-            Asign(_,_) => Ok(Nil), // TODO update environment
+            Asign(name, value) => {
+                let value = self.evaluate(value)?;
+                self.environment.assign(name, value);
+                self.environment.get(name)
+            }
             Grouping(expression) => self.evaluate(&expression),
             Unary(op, right) => match (op.typ, self.evaluate(right)?) {
                 (t::Bang, r) => Ok(Bool(!is_truthy(r))),
@@ -312,7 +319,33 @@ mod spec {
                  print a; // 1.
                  var a = true;
                  print a; // true."),
-            "1\ntrue\n"
+            "1\n\
+             true\n"
+        );
+        assert_eq!(run("var a = 1; print a = 2;"), "2\n");
+        assert_eq!(run("a = 1;"), "[line 1] Undefined variable \'a\'.\n");
+        assert_eq!(
+            run("var a;
+                 var b;
+                 var c;
+                 print a;
+                 print b;
+                 print c;
+                 a = b = c = 1;
+                 print a;
+                 print b;
+                 print c;
+                 "),
+            "nil\n\
+             nil\n\
+             nil\n\
+             1\n\
+             1\n\
+             1\n"
+        );
+        assert_eq!(
+            run("var a = b = c = 1;"),
+            "[line 1] Undefined variable \'c\'.\n"
         );
     }
 }

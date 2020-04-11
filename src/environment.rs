@@ -14,6 +14,11 @@ impl Environment {
         self.values.insert(var.clone(), value);
     }
 
+    pub fn assign(&mut self, token: &Token, value: Literal) {
+        let var = &token.lexeme;
+        self.values.entry(var.clone()).and_modify(|v| *v = value);
+    }
+
     pub fn get(&self, token: &Token) -> Result<Literal, RuntimeError> {
         let var = &token.lexeme;
         let value = self.values.get(var).cloned();
