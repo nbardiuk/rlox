@@ -6,14 +6,15 @@ use crate::token::{self, Literal::*, Token, TokenType as t};
 use std::io::Write;
 use std::result::Result::{Err, Ok};
 
-#[derive(Default)]
 pub struct Interpreter {
     environment: Environment,
 }
 
 impl Interpreter {
     pub fn new() -> Self {
-        Self::default()
+        Self {
+            environment: Environment::new(),
+        }
     }
 
     pub fn interpret<W: Write>(&mut self, lox: &mut Lox<W>, statements: Vec<Stmt>) {
@@ -27,7 +28,11 @@ impl Interpreter {
 
     fn execute<W: Write>(&mut self, lox: &mut Lox<W>, stmt: &Stmt) -> Result<(), RuntimeError> {
         match stmt {
-            Block(statemets) => {} // TODO nest context and eval
+            Block(statements) => {
+                self.environment.nest();
+                statements.iter().try_for_each(|s| self.execute(lox, s))?;
+                self.environment.unnest();
+            }
             Expression(expression) => {
                 self.evaluate(expression).map(|_| ())?;
             }
@@ -346,6 +351,57 @@ mod spec {
         assert_eq!(
             run("var a = b = c = 1;"),
             "[line 1] Undefined variable \'c\'.\n"
+        );
+    }
+
+    #[test]
+    fn blocks() {
+        assert_eq!(
+            run("var a = \"global a\";
+                 var b = \"global b\";
+                 var c = \"global c\";
+                 {
+                   var a = \"outer a\";
+                   var b = \"outer b\";
+                   {
+                     var a = \"inner a\";
+                     print a;
+                     print b;
+                     print c;
+                   }
+                   print a;
+                   print b;
+                   print c;
+                 }
+                 print a;
+                 print b;
+                 print c;"),
+            "\"inner a\"\n\
+             \"outer b\"\n\
+             \"global c\"\n\
+             \"outer a\"\n\
+             \"outer b\"\n\
+             \"global c\"\n\
+             \"global a\"\n\
+             \"global b\"\n\
+             \"global c\"\n"
+        );
+        assert_eq!(
+            run("{
+                   var a = 1;
+                 }
+                 {
+                   a = 2;
+                 }"),
+            "[line 5] Undefined variable \'a\'.\n"
+        );
+        assert_eq!(
+            run("var a = 1;
+                 {
+                   var a = a + 2;
+                   print a;
+                 }"),
+            "3\n"
         );
     }
 }
