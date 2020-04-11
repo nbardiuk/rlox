@@ -88,7 +88,7 @@ impl<W: Write> Lox<W> {
     }
 
     pub fn error(&mut self, line: usize, message: &str) {
-        self.report(line, "", message);
+        self.report(line, "", message).unwrap()
     }
 
     pub fn error_token(&mut self, token: Token, message: &str) {
@@ -96,15 +96,11 @@ impl<W: Write> Lox<W> {
             TokenType::EOF => self.report(token.line, " at end", message),
             _ => self.report(token.line, &format!(" at '{}'", token.lexeme), message),
         }
+        .unwrap()
     }
 
-    fn report(&mut self, line: usize, location: &str, message: &str) {
-        self.out
-            .write_fmt(format_args!(
-                "[line {}] Error{}: {}\n",
-                line, location, message
-            ))
-            .unwrap();
+    fn report(&mut self, line: usize, location: &str, message: &str) -> io::Result<()> {
         self.has_error = true;
+        self.println(&format!("[line {}] Error{}: {}", line, location, message))
     }
 }
