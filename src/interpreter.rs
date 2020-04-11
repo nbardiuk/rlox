@@ -387,6 +387,14 @@ mod spec {
              \"global c\"\n"
         );
         assert_eq!(
+            run("var a = 1;
+                 {
+                   var a = a + 2;
+                   print a;
+                 }"),
+            "3\n"
+        );
+        assert_eq!(
             run("{
                    var a = 1;
                  }
@@ -396,12 +404,12 @@ mod spec {
             "[line 5] Undefined variable \'a\'.\n"
         );
         assert_eq!(
-            run("var a = 1;
-                 {
-                   var a = a + 2;
-                   print a;
-                 }"),
-            "3\n"
+            run("{
+                   var a = 1;
+                 }
+                 a = 2;
+                 "),
+            "[line 4] Undefined variable \'a\'.\n"
         );
     }
 }
