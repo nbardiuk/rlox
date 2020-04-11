@@ -1,4 +1,4 @@
-mod expr;
+mod ast;
 mod interpreter;
 mod lox;
 mod parser;
