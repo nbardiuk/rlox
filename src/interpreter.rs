@@ -228,6 +228,7 @@ mod spec {
         assert_eq!(run("print 1;"), "1\n");
         assert_eq!(run("print \"str\";"), "\"str\"\n");
         assert_eq!(run("print true;"), "true\n");
+        assert_eq!(run("print clock;"), "clock\n");
     }
 
     #[test]
@@ -237,6 +238,7 @@ mod spec {
         assert_eq!(run("print -false;"), "[line 1] Operand must be a number\n");
         assert_eq!(run("print -\"\";"), "[line 1] Operand must be a number\n");
         assert_eq!(run("print -nil;"), "[line 1] Operand must be a number\n");
+        assert_eq!(run("print -clock;"), "[line 1] Operand must be a number\n");
     }
 
     #[test]
@@ -249,6 +251,7 @@ mod spec {
         assert_eq!(run("print !\"non empty\";"), "false\n");
         assert_eq!(run("print !nil;"), "true\n");
         assert_eq!(run("print !!!!1;"), "true\n");
+        assert_eq!(run("print !clock;"), "false\n");
     }
 
     #[test]
@@ -258,6 +261,7 @@ mod spec {
         assert_eq!(run("print true-1;"), "[line 1] Operands must be numbers\n");
         assert_eq!(run("print nil-1;"), "[line 1] Operands must be numbers\n");
         assert_eq!(run("print 1-\"\";"), "[line 1] Operands must be numbers\n");
+        assert_eq!(run("print 1-clock;"), "[line 1] Operands must be numbers\n");
     }
 
     #[test]
@@ -267,6 +271,7 @@ mod spec {
         assert_eq!(run("print true/1;"), "[line 1] Operands must be numbers\n");
         assert_eq!(run("print nil/1;"), "[line 1] Operands must be numbers\n");
         assert_eq!(run("print 1/\"\";"), "[line 1] Operands must be numbers\n");
+        assert_eq!(run("print 1/clock;"), "[line 1] Operands must be numbers\n");
     }
 
     #[test]
@@ -275,6 +280,7 @@ mod spec {
         assert_eq!(run("print true*1;"), "[line 1] Operands must be numbers\n");
         assert_eq!(run("print nil*1;"), "[line 1] Operands must be numbers\n");
         assert_eq!(run("print 1*\"\";"), "[line 1] Operands must be numbers\n");
+        assert_eq!(run("print 1*clock;"), "[line 1] Operands must be numbers\n");
     }
 
     #[test]
@@ -293,6 +299,10 @@ mod spec {
             run("print 1+\"\";"),
             "[line 1] Operands must be two numbers or two strings\n"
         );
+        assert_eq!(
+            run("print 1+clock;"),
+            "[line 1] Operands must be two numbers or two strings\n"
+        );
     }
 
     #[test]
@@ -303,6 +313,7 @@ mod spec {
         assert_eq!(run("print true>1;"), "[line 1] Operands must be numbers\n");
         assert_eq!(run("print nil>1;"), "[line 1] Operands must be numbers\n");
         assert_eq!(run("print 1>\"\";"), "[line 1] Operands must be numbers\n");
+        assert_eq!(run("print 1>clock;"), "[line 1] Operands must be numbers\n");
     }
 
     #[test]
@@ -313,6 +324,10 @@ mod spec {
         assert_eq!(run("print true>=1;"), "[line 1] Operands must be numbers\n");
         assert_eq!(run("print nil>=1;"), "[line 1] Operands must be numbers\n");
         assert_eq!(run("print 1>=\"\";"), "[line 1] Operands must be numbers\n");
+        assert_eq!(
+            run("print 1>=clock;"),
+            "[line 1] Operands must be numbers\n"
+        );
     }
 
     #[test]
@@ -323,6 +338,7 @@ mod spec {
         assert_eq!(run("print true<1;"), "[line 1] Operands must be numbers\n");
         assert_eq!(run("print nil<1;"), "[line 1] Operands must be numbers\n");
         assert_eq!(run("print 1<\"\";"), "[line 1] Operands must be numbers\n");
+        assert_eq!(run("print 1<clock;"), "[line 1] Operands must be numbers\n");
     }
 
     #[test]
@@ -333,6 +349,10 @@ mod spec {
         assert_eq!(run("print true<=1;"), "[line 1] Operands must be numbers\n");
         assert_eq!(run("print nil<=1;"), "[line 1] Operands must be numbers\n");
         assert_eq!(run("print 1<=\"\";"), "[line 1] Operands must be numbers\n");
+        assert_eq!(
+            run("print 1<=clock;"),
+            "[line 1] Operands must be numbers\n"
+        );
     }
 
     #[test]
@@ -349,6 +369,10 @@ mod spec {
         assert_eq!(run("print nil==false;"), "false\n");
         assert_eq!(run("print \"true\"==true;"), "false\n");
         assert_eq!(run("print \"1\"==1;"), "false\n");
+        assert_eq!(
+            run("print clock==1;"),
+            "[line 1] Operands must be numbers\n"
+        ); // FIXME wrong message
     }
 
     #[test]
@@ -365,6 +389,10 @@ mod spec {
         assert_eq!(run("print nil!=false;"), "true\n");
         assert_eq!(run("print \"true\"!=true;"), "true\n");
         assert_eq!(run("print \"1\"!=1;"), "true\n");
+        assert_eq!(
+            run("print clock!=1;"),
+            "[line 1] Operands must be numbers\n"
+        ); // FIXME wrong message
     }
 
     #[test]
@@ -609,7 +637,8 @@ mod spec {
 
     #[test]
     fn function_call() {
-        assert_eq!(run("print clock() < clock();"), "true\n");
+        assert_eq!(run("print clock() > 1580000000;"), "true\n");
+        assert_eq!(run("var f = clock; print f() > 1580000000;"), "true\n");
         assert_eq!(run("A(B,C);"), "[line 1] Undefined variable \'A\'.\n");
         assert_eq!(
             run("clock(B,C);"),
