@@ -7,6 +7,7 @@ use std::fmt;
 use std::io::Write;
 use std::rc::Rc;
 use std::result::Result::{Err, Ok};
+use std::time::Instant;
 use Value::*;
 
 pub struct Interpreter {
@@ -18,7 +19,7 @@ impl Interpreter {
         let mut s = Self {
             environment: Environment::new(),
         };
-        s.environment.define("clock", F(Rc::new(Clock {})));
+        s.environment.define("clock", F(Rc::new(Clock::new())));
         s
     }
 
@@ -157,19 +158,24 @@ pub trait Callable: fmt::Display {
     fn arity(&self) -> usize;
 }
 
-struct Clock {}
+struct Clock {
+    start: Instant,
+}
+impl Clock {
+    fn new() -> Self {
+        Self {
+            start: Instant::now(),
+        }
+    }
+}
 impl Callable for Clock {
     fn arity(&self) -> usize {
         0
     }
 
     fn call(&self, _: &Interpreter, _: &Token, _: &[Value]) -> Result<Value, RuntimeError> {
-        use std::time::{SystemTime, UNIX_EPOCH};
-        let start = SystemTime::now();
-        let since_the_epoch = start
-            .duration_since(UNIX_EPOCH)
-            .expect("Time went backwards");
-        Ok(V(Number(since_the_epoch.as_secs_f64())))
+        let now = Instant::now();
+        Ok(V(Number(now.duration_since(self.start).as_secs_f64())))
     }
 }
 
@@ -637,8 +643,8 @@ mod spec {
 
     #[test]
     fn function_call() {
-        assert_eq!(run("print clock() > 1580000000;"), "true\n");
-        assert_eq!(run("var f = clock; print f() > 1580000000;"), "true\n");
+        assert_eq!(run("print clock() > 0 and clock() < 0.0001;"), "true\n");
+        assert_eq!(run("var f = clock; print f() < 0.0001;"), "true\n");
         assert_eq!(run("A(B,C);"), "[line 1] Undefined variable \'A\'.\n");
         assert_eq!(
             run("clock(B,C);"),
