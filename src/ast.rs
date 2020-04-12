@@ -11,6 +11,7 @@ pub enum Stmt {
     Print(Rc<Expr>),
     Var(Token, Option<Rc<Expr>>),
     Block(Vec<Stmt>),
+    If(Rc<Expr>, Rc<Stmt>, Option<Rc<Stmt>>),
 }
 
 pub enum Expr {
@@ -31,6 +32,10 @@ impl Display for Stmt {
             Print(expression) => write!(f, "(print {})", expression),
             Var(name, Some(initializer)) => write!(f, "(def {} {})", name.lexeme, initializer),
             Var(name, None) => write!(f, "(def {})", name.lexeme),
+            If(condition, then, Some(r#else)) => {
+                write!(f, "(if {} {} {})", condition, then, r#else)
+            }
+            If(condition, then, None) => write!(f, "(if {} {})", condition, then),
         }
     }
 }
@@ -158,5 +163,26 @@ mod spec {
             expression.to_string(),
             "(do (expr (set! varname 42)) (expr false))"
         );
+    }
+
+    #[test]
+    fn if_statement() {
+        use crate::token::Literal::*;
+        use Expr::*;
+        use Stmt::*;
+
+        let expression = If(
+            Rc::new(Literal(Bool(false))),
+            Rc::new(Expression(Rc::new(Literal(Number(12.))))),
+            Some(Rc::new(Print(Rc::new(Literal(Number(21.)))))),
+        );
+        assert_eq!(expression.to_string(), "(if false (expr 12) (print 21))");
+
+        let expression = If(
+            Rc::new(Literal(Bool(false))),
+            Rc::new(Expression(Rc::new(Literal(Number(12.))))),
+            None,
+        );
+        assert_eq!(expression.to_string(), "(if false (expr 12))");
     }
 }

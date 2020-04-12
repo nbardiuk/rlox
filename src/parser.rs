@@ -66,13 +66,33 @@ impl<'a, W: Write> Parser<'a, W> {
 
     fn statement(&mut self) -> Result<Stmt, ParserError> {
         use TokenType::*;
-        if self.matches(&[Print]) {
+        if self.matches(&[If]) {
+            self.if_statement()
+        } else if self.matches(&[Print]) {
             self.print_statement()
         } else if self.matches(&[LeftBrace]) {
             Ok(Stmt::Block(self.block()?))
         } else {
             self.expression_statement()
         }
+    }
+
+    fn if_statement(&mut self) -> Result<Stmt, ParserError> {
+        use TokenType::*;
+
+        self.consume(LeftParen, "Expect '(' after if.")?;
+        let condition = Rc::new(self.expression()?);
+        self.consume(RightParen, "Expect ')' after if.")?;
+
+        let then = Rc::new(self.statement()?);
+
+        let r#else = if self.matches(&[Else]) {
+            Some(Rc::new(self.statement()?))
+        } else {
+            None
+        };
+
+        Ok(Stmt::If(condition, then, r#else))
     }
 
     fn block(&mut self) -> Result<Vec<Stmt>, ParserError> {
@@ -622,6 +642,44 @@ mod spec {
             vec![
                 "[line 2] Error at end: Expect \'}\' after block",
                 "[line 2] Error at end: Expect \'}\' after block"
+            ]
+        );
+    }
+
+    #[test]
+    fn ifs() {
+        assert_eq!(
+            parse("if (condition) print when_true; else print when_false;"),
+            vec!["(if condition (print when_true) (print when_false))"]
+        );
+        assert_eq!(
+            parse("if (a) if (b) 1; else 2;"),
+            vec!["(if a (if b (expr 1) (expr 2)))"]
+        );
+        assert_eq!(
+            parse("if (a) { if (b) when_true; } else when_false;"),
+            vec!["(if a (do (if b (expr when_true))) (expr when_false))"]
+        );
+        assert_eq!(
+            parse("if a 1; else 2;"),
+            vec![
+                "[line 1] Error at \'a\': Expect \'(\' after if.",
+                "[line 1] Error at \'else\': Expect expression"
+            ]
+        );
+        assert_eq!(
+            parse("if (a 1; else 2;"),
+            vec![
+                "[line 1] Error at \'1\': Expect \')\' after if.",
+                "[line 1] Error at \'else\': Expect expression"
+            ]
+        );
+        assert_eq!(
+            parse("if (a); 1; else 2;"),
+            vec![
+                "[line 1] Error at \';\': Expect expression",
+                "[line 1] Error at \'else\': Expect expression",
+                "(expr 1)"
             ]
         );
     }

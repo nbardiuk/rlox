@@ -47,6 +47,13 @@ impl Interpreter {
                 }
                 _ => self.environment.define(name, Nil),
             },
+            If(condition, then, r#else) => {
+                if is_truthy(self.evaluate(condition)?) {
+                    self.execute(lox, then)?;
+                } else if let Some(els) = r#else {
+                    self.execute(lox, els)?;
+                }
+            }
         }
         Ok(())
     }
@@ -410,6 +417,24 @@ mod spec {
                  a = 2;
                  "),
             "[line 4] Undefined variable \'a\'.\n"
+        );
+    }
+
+    #[test]
+    fn ifs() {
+        assert_eq!(
+            run("var t = true;
+                 var f = false;
+                 if (t) print t; else print f;
+                 if (f) print t; else print f;"),
+            "true\n\
+             false\n"
+        );
+        assert_eq!(
+            run("if (true) print 1; else fail;
+                 if (false) fail; else print 2;"),
+            "1\n\
+             2\n"
         );
     }
 }
