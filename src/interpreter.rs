@@ -86,6 +86,7 @@ impl Interpreter {
                     _ => err(op, "Operands must be numbers"),
                 }
             }
+            Call(callee, paren, args) => Ok(Nil), //TODO
             Grouping(expression) => self.evaluate(&expression),
             Literal(value) => Ok(value.clone()),
             Logical(left, op, right) => {
@@ -318,7 +319,7 @@ mod spec {
             run("print 1"),
             "[line 1] Error at end: Expect \';\' after value.\n"
         );
-        assert_eq!(run("print"), "[line 1] Error at end: Expect expression\n");
+        assert_eq!(run("print"), "[line 1] Error at end: Expect expression.\n");
     }
 
     #[test]

@@ -18,6 +18,7 @@ pub enum Stmt {
 pub enum Expr {
     Asign(Token, Rc<Expr>),
     Binary(Rc<Expr>, Token, Rc<Expr>),
+    Call(Rc<Expr>, Token, Vec<Expr>),
     Grouping(Rc<Expr>),
     Literal(Literal),
     Logical(Rc<Expr>, Token, Rc<Expr>),
@@ -47,6 +48,7 @@ impl Display for Expr {
         match self {
             Asign(name, value) => write!(f, "(set! {} {})", name.lexeme, value),
             Binary(left, op, right) => write!(f, "({} {} {})", op.lexeme, left, right),
+            Call(callee, _, args) => write!(f, "({} {})", callee, join(args, " ")), // TODO paren???
             Grouping(expr) => write!(f, "(group {})", expr),
             Literal(value) => write!(f, "{}", value),
             Logical(left, op, right) => write!(f, "({} {} {})", op.lexeme, left, right),
