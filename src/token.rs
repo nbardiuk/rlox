@@ -30,67 +30,63 @@ impl Display for Token {
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Literal {
-    String(String),
-    Number(f64),
     Bool(bool),
     Nil,
+    Number(f64),
+    String(String),
 }
 
 impl Display for Literal {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
         use Literal::*;
         match self {
-            String(s) => write!(f, "\"{}\"", s),
-            Number(n) => write!(f, "{}", n),
             Bool(b) => write!(f, "{}", b),
             Nil => write!(f, "nil"),
+            Number(n) => write!(f, "{}", n),
+            String(s) => write!(f, "\"{}\"", s),
         }
     }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum TokenType {
-    LeftParen,
-    RightParen,
-    LeftBrace,
-    RightBrace,
+    And,
+    Bang,
+    BangEqual,
+    Class,
     Comma,
     Dot,
+    EOF,
+    Else,
+    Equal,
+    EqualEqual,
+    False,
+    For,
+    Fun,
+    Greater,
+    GreaterEqual,
+    Identifier,
+    If,
+    LeftBrace,
+    LeftParen,
+    Less,
+    LessEqual,
     Minus,
+    Nil,
+    Number,
+    Or,
     Plus,
+    Print,
+    Return,
+    RightBrace,
+    RightParen,
     Semicolon,
     Slash,
     Star,
-
-    Bang,
-    BangEqual,
-    Equal,
-    EqualEqual,
-    Greater,
-    GreaterEqual,
-    Less,
-    LessEqual,
-
-    Identifier,
     String,
-    Number,
-
-    And,
-    Class,
-    Else,
-    False,
-    Fun,
-    For,
-    If,
-    Nil,
-    Or,
-    Print,
-    Return,
     Super,
     This,
     True,
     Var,
     While,
-
-    EOF,
 }

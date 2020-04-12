@@ -36,6 +36,13 @@ impl Interpreter {
             Expression(expression) => {
                 self.evaluate(expression).map(|_| ())?;
             }
+            If(condition, then, r#else) => {
+                if is_truthy(self.evaluate(condition)?) {
+                    self.execute(lox, then)?;
+                } else if let Some(els) = r#else {
+                    self.execute(lox, els)?;
+                }
+            }
             Print(expression) => {
                 let val = self.evaluate(expression)?;
                 lox.println(&val.to_string());
@@ -47,48 +54,41 @@ impl Interpreter {
                 }
                 _ => self.environment.define(name, Nil),
             },
-            If(condition, then, r#else) => {
-                if is_truthy(self.evaluate(condition)?) {
-                    self.execute(lox, then)?;
-                } else if let Some(els) = r#else {
-                    self.execute(lox, els)?;
-                }
-            }
         }
         Ok(())
     }
 
     fn evaluate(&mut self, expr: &Expr) -> Result<token::Literal, RuntimeError> {
         match expr {
-            Literal(value) => Ok(value.clone()),
-            Variable(name) => self.environment.get(name),
             Asign(name, value) => {
                 let value = self.evaluate(value)?;
                 self.environment.assign(name, value)
             }
+            Binary(left, op, right) => {
+                match (op.typ, self.evaluate(left)?, self.evaluate(right)?) {
+                    (t::BangEqual, a, b) => Ok(Bool(a != b)),
+                    (t::EqualEqual, a, b) => Ok(Bool(a == b)),
+                    (t::Greater, Number(a), Number(b)) => Ok(Bool(a > b)),
+                    (t::GreaterEqual, Number(a), Number(b)) => Ok(Bool(a >= b)),
+                    (t::Less, Number(a), Number(b)) => Ok(Bool(a < b)),
+                    (t::LessEqual, Number(a), Number(b)) => Ok(Bool(a <= b)),
+                    (t::Minus, Number(a), Number(b)) => Ok(Number(a - b)),
+                    (t::Plus, Number(a), Number(b)) => Ok(Number(a + b)),
+                    (t::Plus, String(a), String(b)) => Ok(String(a + &b)),
+                    (t::Plus, _, _) => err(op, "Operands must be two numbers or two strings"),
+                    (t::Slash, Number(a), Number(b)) => Ok(Number(a / b)),
+                    (t::Star, Number(a), Number(b)) => Ok(Number(a * b)),
+                    _ => err(op, "Operands must be numbers"),
+                }
+            }
             Grouping(expression) => self.evaluate(&expression),
+            Literal(value) => Ok(value.clone()),
             Unary(op, right) => match (op.typ, self.evaluate(right)?) {
                 (t::Bang, r) => Ok(Bool(!is_truthy(r))),
                 (t::Minus, Number(d)) => Ok(Number(-d)),
                 _ => err(op, "Operand must be a number"),
             },
-            Binary(left, op, right) => {
-                match (op.typ, self.evaluate(left)?, self.evaluate(right)?) {
-                    (t::Minus, Number(a), Number(b)) => Ok(Number(a - b)),
-                    (t::Slash, Number(a), Number(b)) => Ok(Number(a / b)),
-                    (t::Star, Number(a), Number(b)) => Ok(Number(a * b)),
-                    (t::Plus, Number(a), Number(b)) => Ok(Number(a + b)),
-                    (t::Plus, String(a), String(b)) => Ok(String(a + &b)),
-                    (t::Greater, Number(a), Number(b)) => Ok(Bool(a > b)),
-                    (t::GreaterEqual, Number(a), Number(b)) => Ok(Bool(a >= b)),
-                    (t::Less, Number(a), Number(b)) => Ok(Bool(a < b)),
-                    (t::LessEqual, Number(a), Number(b)) => Ok(Bool(a <= b)),
-                    (t::BangEqual, a, b) => Ok(Bool(a != b)),
-                    (t::EqualEqual, a, b) => Ok(Bool(a == b)),
-                    (t::Plus, _, _) => err(op, "Operands must be two numbers or two strings"),
-                    _ => err(op, "Operands must be numbers"),
-                }
-            }
+            Variable(name) => self.environment.get(name),
         }
     }
 }
