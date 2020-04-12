@@ -30,24 +30,15 @@ impl Display for Stmt {
         use Stmt::*;
         match self {
             Block(statemets) => write!(f, "(do {})", join(statemets, " ")),
-            Expression(expression) => write!(f, "(expr {})", expression),
-            If(condition, then, None) => write!(f, "(if {} {})", condition, then),
-            If(condition, then, Some(r#else)) => {
-                write!(f, "(if {} {} {})", condition, then, r#else)
-            }
-            Print(expression) => write!(f, "(print {})", expression),
+            Expression(expr) => write!(f, "(expr {})", expr),
+            If(cond, then, None) => write!(f, "(if {} {})", cond, then),
+            If(cond, then, Some(r#else)) => write!(f, "(if {} {} {})", cond, then, r#else),
+            Print(expr) => write!(f, "(print {})", expr),
             Var(name, None) => write!(f, "(def {})", name.lexeme),
-            Var(name, Some(initializer)) => write!(f, "(def {} {})", name.lexeme, initializer),
-            While(condition, body) => write!(f, "(while {} {})", condition, body),
+            Var(name, Some(init)) => write!(f, "(def {} {})", name.lexeme, init),
+            While(cond, body) => write!(f, "(while {} {})", cond, body),
         }
     }
-}
-
-fn join<D: Display>(ds: &[D], separator: &str) -> String {
-    ds.iter()
-        .map(|s| s.to_string())
-        .collect::<Vec<_>>()
-        .join(separator)
 }
 
 impl Display for Expr {
@@ -55,12 +46,19 @@ impl Display for Expr {
         use Expr::*;
         match self {
             Asign(name, value) => write!(f, "(set! {} {})", name.lexeme, value),
-            Binary(left, operator, right) => write!(f, "({} {} {})", operator.lexeme, left, right),
-            Grouping(expression) => write!(f, "(group {})", expression),
+            Binary(left, op, right) => write!(f, "({} {} {})", op.lexeme, left, right),
+            Grouping(expr) => write!(f, "(group {})", expr),
             Literal(value) => write!(f, "{}", value),
-            Logical(left, operator, right) => write!(f, "({} {} {})", operator.lexeme, left, right),
-            Unary(operator, right) => write!(f, "({} {})", operator.lexeme, right),
+            Logical(left, op, right) => write!(f, "({} {} {})", op.lexeme, left, right),
+            Unary(op, right) => write!(f, "({} {})", op.lexeme, right),
             Variable(name) => write!(f, "{}", name.lexeme),
         }
     }
+}
+
+fn join<D: Display>(ds: &[D], separator: &str) -> String {
+    ds.iter()
+        .map(D::to_string)
+        .collect::<Vec<_>>()
+        .join(separator)
 }
