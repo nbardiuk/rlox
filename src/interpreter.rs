@@ -54,6 +54,11 @@ impl Interpreter {
                 }
                 _ => self.environment.define(name, Nil),
             },
+            While(condition, body) => {
+                while is_truthy(&self.evaluate(condition)?) {
+                    self.execute(lox, body)?
+                }
+            }
         }
         Ok(())
     }
@@ -463,6 +468,32 @@ mod spec {
         assert_eq!(
             run("print 1 and FAIL;"),
             "[line 1] Undefined variable 'FAIL'.\n"
+        );
+    }
+
+    #[test]
+    fn whiles() {
+        assert_eq!(
+            run("var a = 0;
+                 var b = 1;
+                 var i = 0;
+                 while (i < 17) {
+                   i = i + 1;
+                   var t = b;
+                   b = a + b;
+                   a = t;
+                 }
+                 print b;"),
+            "2584\n"
+        );
+        assert_eq!(run("while (false) { FAIL; } print 1;"), "1\n");
+        assert_eq!(
+            run("while (true) { FAIL; } print 1;"),
+            "[line 1] Undefined variable \'FAIL\'.\n"
+        );
+        assert_eq!(
+            run("while (FAIL) { print 1; } print 2;"),
+            "[line 1] Undefined variable \'FAIL\'.\n"
         );
     }
 }

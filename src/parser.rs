@@ -70,6 +70,8 @@ impl<'a, W: Write> Parser<'a, W> {
             self.if_statement()
         } else if self.matches(&[Print]) {
             self.print_statement()
+        } else if self.matches(&[While]) {
+            self.while_statement()
         } else if self.matches(&[LeftBrace]) {
             Ok(Stmt::Block(self.block()?))
         } else {
@@ -82,7 +84,7 @@ impl<'a, W: Write> Parser<'a, W> {
 
         self.consume(LeftParen, "Expect '(' after if.")?;
         let condition = Rc::new(self.expression()?);
-        self.consume(RightParen, "Expect ')' after if.")?;
+        self.consume(RightParen, "Expect ')' after condition.")?;
 
         let then = Rc::new(self.statement()?);
 
@@ -93,6 +95,18 @@ impl<'a, W: Write> Parser<'a, W> {
         };
 
         Ok(Stmt::If(condition, then, r#else))
+    }
+
+    fn while_statement(&mut self) -> Result<Stmt, ParserError> {
+        use TokenType::*;
+
+        self.consume(LeftParen, "Expect '(' after while.")?;
+        let condition = Rc::new(self.expression()?);
+        self.consume(RightParen, "Expect ')' after condition.")?;
+
+        let body = Rc::new(self.statement()?);
+
+        Ok(Stmt::While(condition, body))
     }
 
     fn block(&mut self) -> Result<Vec<Stmt>, ParserError> {
@@ -696,7 +710,7 @@ mod spec {
         assert_eq!(
             parse("if (a 1; else 2;"),
             vec![
-                "[line 1] Error at \'1\': Expect \')\' after if.",
+                "[line 1] Error at \'1\': Expect \')\' after condition.",
                 "[line 1] Error at \'else\': Expect expression"
             ]
         );
@@ -729,6 +743,30 @@ mod spec {
         assert_eq!(
             parse("1 > 2 and 3 < 4;"),
             vec!["(expr (and (> 1 2) (< 3 4)))"]
+        );
+    }
+
+    #[test]
+    fn whiles() {
+        assert_eq!(parse("while (true) {}"), vec!["(while true (do ))"]);
+        assert_eq!(
+            parse("while (a or b) print c;"),
+            vec!["(while (or a b) (print c))"]
+        );
+        assert_eq!(
+            parse("while true {}"),
+            vec!["[line 1] Error at \'true\': Expect \'(\' after while."]
+        );
+        assert_eq!(
+            parse("while (true {}"),
+            vec!["[line 1] Error at \'{\': Expect \')\' after condition."]
+        );
+        assert_eq!(
+            parse("while (print 1;) {}"),
+            vec![
+                "[line 1] Error at \'print\': Expect expression",
+                "[line 1] Error at \')\': Expect expression"
+            ]
         );
     }
 }

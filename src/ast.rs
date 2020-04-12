@@ -12,6 +12,7 @@ pub enum Stmt {
     If(Rc<Expr>, Rc<Stmt>, Option<Rc<Stmt>>),
     Print(Rc<Expr>),
     Var(Token, Option<Rc<Expr>>),
+    While(Rc<Expr>, Rc<Stmt>),
 }
 
 pub enum Expr {
@@ -37,6 +38,7 @@ impl Display for Stmt {
             Print(expression) => write!(f, "(print {})", expression),
             Var(name, None) => write!(f, "(def {})", name.lexeme),
             Var(name, Some(initializer)) => write!(f, "(def {} {})", name.lexeme, initializer),
+            While(condition, body) => write!(f, "(while {} {})", condition, body),
         }
     }
 }
@@ -60,152 +62,5 @@ impl Display for Expr {
             Unary(operator, right) => write!(f, "({} {})", operator.lexeme, right),
             Variable(name) => write!(f, "{}", name.lexeme),
         }
-    }
-}
-
-#[cfg(test)]
-mod spec {
-    use super::*;
-
-    #[test]
-    fn display_expr() {
-        use crate::token::Literal::*;
-        use crate::token::TokenType::{Identifier, Minus, Star};
-        use Expr::*;
-
-        let expression = Binary(
-            Rc::new(Unary(
-                Token::new(Minus, "-", Nil, 1),
-                Rc::new(Variable(Token::new(Identifier, "varname", Nil, 1))),
-            )),
-            Token::new(Star, "*", Nil, 1),
-            Rc::new(Grouping(Rc::new(Literal(Number(45.67))))),
-        );
-
-        assert_eq!(expression.to_string(), "(* (- varname) (group 45.67))");
-    }
-
-    #[test]
-    fn display_logical() {
-        use crate::token::Literal::*;
-        use crate::token::TokenType::{And, Identifier, Or};
-        use Expr::*;
-
-        let expression = Logical(
-            Rc::new(Variable(Token::new(Identifier, "varname", Nil, 1))),
-            Token::new(Or, "or", Nil, 1),
-            Rc::new(Literal(Number(45.67))),
-        );
-        assert_eq!(expression.to_string(), "(or varname 45.67)");
-
-        let expression = Logical(
-            Rc::new(Literal(Number(45.67))),
-            Token::new(And, "and", Nil, 1),
-            Rc::new(Variable(Token::new(Identifier, "varname", Nil, 1))),
-        );
-        assert_eq!(expression.to_string(), "(and 45.67 varname)");
-    }
-
-    #[test]
-    fn display_expression() {
-        use crate::token::Literal::*;
-        use crate::token::TokenType::Minus;
-        use Expr::*;
-        use Stmt::*;
-
-        let expression = Expression(Rc::new(Unary(
-            Token::new(Minus, "-", Nil, 1),
-            Rc::new(Literal(Number(123.))),
-        )));
-
-        assert_eq!(expression.to_string(), "(expr (- 123))");
-    }
-
-    #[test]
-    fn display_print() {
-        use crate::token::Literal::*;
-        use crate::token::TokenType::Minus;
-        use Expr::*;
-        use Stmt::*;
-
-        let expression = Print(Rc::new(Unary(
-            Token::new(Minus, "-", Nil, 1),
-            Rc::new(Literal(Number(123.))),
-        )));
-
-        assert_eq!(expression.to_string(), "(print (- 123))");
-    }
-
-    #[test]
-    fn display_var() {
-        use crate::token::Literal::*;
-        use crate::token::TokenType::Identifier;
-        use Expr::*;
-        use Stmt::*;
-
-        let expression = Var(
-            Token::new(Identifier, "varname", Nil, 1),
-            Some(Rc::new(Literal(Number(42.)))),
-        );
-        assert_eq!(expression.to_string(), "(def varname 42)");
-
-        let expression = Var(Token::new(Identifier, "another", Nil, 1), None);
-        assert_eq!(expression.to_string(), "(def another)");
-    }
-
-    #[test]
-    fn display_assign() {
-        use crate::token::Literal::*;
-        use crate::token::TokenType::Identifier;
-        use Expr::*;
-
-        let expression = Asign(
-            Token::new(Identifier, "varname", Nil, 1),
-            Rc::new(Literal(Number(42.))),
-        );
-
-        assert_eq!(expression.to_string(), "(set! varname 42)");
-    }
-
-    #[test]
-    fn display_block() {
-        use crate::token::Literal::*;
-        use crate::token::TokenType::Identifier;
-        use Expr::*;
-        use Stmt::*;
-
-        let expression = Block(vec![
-            Expression(Rc::new(Asign(
-                Token::new(Identifier, "varname", Nil, 1),
-                Rc::new(Literal(Number(42.))),
-            ))),
-            Expression(Rc::new(Literal(Bool(false)))),
-        ]);
-
-        assert_eq!(
-            expression.to_string(),
-            "(do (expr (set! varname 42)) (expr false))"
-        );
-    }
-
-    #[test]
-    fn if_statement() {
-        use crate::token::Literal::*;
-        use Expr::*;
-        use Stmt::*;
-
-        let expression = If(
-            Rc::new(Literal(Bool(false))),
-            Rc::new(Expression(Rc::new(Literal(Number(12.))))),
-            Some(Rc::new(Print(Rc::new(Literal(Number(21.)))))),
-        );
-        assert_eq!(expression.to_string(), "(if false (expr 12) (print 21))");
-
-        let expression = If(
-            Rc::new(Literal(Bool(false))),
-            Rc::new(Expression(Rc::new(Literal(Number(12.))))),
-            None,
-        );
-        assert_eq!(expression.to_string(), "(if false (expr 12))");
     }
 }
