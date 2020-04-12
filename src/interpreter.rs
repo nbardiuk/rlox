@@ -86,7 +86,14 @@ impl Interpreter {
                     _ => err(op, "Operands must be numbers"),
                 }
             }
-            Call(callee, paren, args) => Ok(Nil), //TODO
+            Call(callee, paren, args) => {
+                let callee = self.evaluate(callee)?;
+                let mut ars = vec![];
+                for arg in args {
+                    ars.push(self.evaluate(arg)?);
+                }
+                callee.call(self, paren, &ars)
+            }
             Grouping(expression) => self.evaluate(&expression),
             Literal(value) => Ok(value.clone()),
             Logical(left, op, right) => {
@@ -104,6 +111,26 @@ impl Interpreter {
             },
             Variable(name) => self.environment.get(name),
         }
+    }
+}
+
+trait Callable {
+    fn call(
+        &self,
+        interpreter: &Interpreter,
+        paren: &Token,
+        args: &[token::Literal],
+    ) -> Result<token::Literal, RuntimeError>;
+}
+
+impl Callable for token::Literal {
+    fn call(
+        &self,
+        _: &Interpreter,
+        paren: &Token,
+        _: &[token::Literal],
+    ) -> Result<token::Literal, RuntimeError> {
+        err(paren, "Can only call functions and classes.")
     }
 }
 
@@ -497,6 +524,7 @@ mod spec {
             "[line 1] Undefined variable \'FAIL\'.\n"
         );
     }
+
     #[test]
     fn fors() {
         assert_eq!(
@@ -531,6 +559,29 @@ mod spec {
         assert_eq!(
             run("for(var i=0;i<3;i=i+1){}print i;"),
             "[line 1] Undefined variable \'i\'.\n"
+        );
+    }
+
+    #[test]
+    fn function_call() {
+        assert_eq!(run("A(B,C);"), "[line 1] Undefined variable \'A\'.\n");
+        assert_eq!(run("1(B,C);"), "[line 1] Undefined variable \'B\'.\n");
+        assert_eq!(run("1(2,C);"), "[line 1] Undefined variable \'C\'.\n");
+        assert_eq!(
+            run("1();"),
+            "[line 1] Can only call functions and classes.\n"
+        );
+        assert_eq!(
+            run("true();"),
+            "[line 1] Can only call functions and classes.\n"
+        );
+        assert_eq!(
+            run("nil();"),
+            "[line 1] Can only call functions and classes.\n"
+        );
+        assert_eq!(
+            run("\"not a fun\"();"),
+            "[line 1] Can only call functions and classes.\n"
         );
     }
 }
