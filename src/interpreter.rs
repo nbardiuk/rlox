@@ -525,18 +525,11 @@ mod spec {
             run("for(FAIL;true;) print 0; print 1;"),
             "[line 1] Undefined variable \'FAIL\'.\n"
         );
+        assert_eq!(run("var i=10;for(i=0;i<3;i=i+1){}print i;"), "3\n");
+        assert_eq!(run("var i=true;for(var i=0;i<3;i=i+1){}print i;"), "true\n");
         assert_eq!(
-            run("var i;for(i=0;i<3;i=i+1)print i;"),
-            "0\n\
-             1\n\
-             2\n"
-        );
-        assert_eq!(
-            run("var i=true;for(var i=0;i<3;i=i+1)print i;print i;"),
-            "0\n\
-             1\n\
-             2\n\
-             true\n"
+            run("for(var i=0;i<3;i=i+1){}print i;"),
+            "[line 1] Undefined variable \'i\'.\n"
         );
     }
 }
