@@ -37,7 +37,7 @@ impl Interpreter {
                 self.evaluate(expression).map(|_| ())?;
             }
             If(condition, then, r#else) => {
-                if is_truthy(self.evaluate(condition)?) {
+                if is_truthy(&self.evaluate(condition)?) {
                     self.execute(lox, then)?;
                 } else if let Some(els) = r#else {
                     self.execute(lox, els)?;
@@ -83,8 +83,16 @@ impl Interpreter {
             }
             Grouping(expression) => self.evaluate(&expression),
             Literal(value) => Ok(value.clone()),
+            Logical(left, op, right) => {
+                let left = self.evaluate(left)?;
+                match (op.typ, is_truthy(&left)) {
+                    (t::And, false) => Ok(left),
+                    (t::Or, true) => Ok(left),
+                    _ => self.evaluate(right),
+                }
+            }
             Unary(op, right) => match (op.typ, self.evaluate(right)?) {
-                (t::Bang, r) => Ok(Bool(!is_truthy(r))),
+                (t::Bang, r) => Ok(Bool(!is_truthy(&r))),
                 (t::Minus, Number(d)) => Ok(Number(-d)),
                 _ => err(op, "Operand must be a number"),
             },
@@ -112,10 +120,10 @@ pub fn err<T>(token: &Token, message: &str) -> Result<T, RuntimeError> {
     Err(RuntimeError::new(token, message))
 }
 
-fn is_truthy(l: token::Literal) -> bool {
+fn is_truthy(l: &token::Literal) -> bool {
     match l {
         Nil => false,
-        Bool(b) => b,
+        Bool(b) => *b,
         _ => true,
     }
 }
@@ -435,6 +443,26 @@ mod spec {
                  if (false) fail; else print 2;"),
             "1\n\
              2\n"
+        );
+    }
+
+    #[test]
+    fn logical() {
+        assert_eq!(
+            run("print 1 or 2 or FAIL;
+                 print 1 and 2;
+                 print 1 and false and FAIL;"),
+            "1\n\
+             2\n\
+             false\n"
+        );
+        assert_eq!(
+            run("print nil or FAIL;"),
+            "[line 1] Undefined variable 'FAIL'.\n"
+        );
+        assert_eq!(
+            run("print 1 and FAIL;"),
+            "[line 1] Undefined variable 'FAIL'.\n"
         );
     }
 }

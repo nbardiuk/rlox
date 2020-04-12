@@ -19,6 +19,7 @@ pub enum Expr {
     Binary(Rc<Expr>, Token, Rc<Expr>),
     Grouping(Rc<Expr>),
     Literal(Literal),
+    Logical(Rc<Expr>, Token, Rc<Expr>),
     Unary(Token, Rc<Expr>),
     Variable(Token),
 }
@@ -55,6 +56,7 @@ impl Display for Expr {
             Binary(left, operator, right) => write!(f, "({} {} {})", operator.lexeme, left, right),
             Grouping(expression) => write!(f, "(group {})", expression),
             Literal(value) => write!(f, "{}", value),
+            Logical(left, operator, right) => write!(f, "({} {} {})", operator.lexeme, left, right),
             Unary(operator, right) => write!(f, "({} {})", operator.lexeme, right),
             Variable(name) => write!(f, "{}", name.lexeme),
         }
@@ -81,6 +83,27 @@ mod spec {
         );
 
         assert_eq!(expression.to_string(), "(* (- varname) (group 45.67))");
+    }
+
+    #[test]
+    fn display_logical() {
+        use crate::token::Literal::*;
+        use crate::token::TokenType::{And, Identifier, Or};
+        use Expr::*;
+
+        let expression = Logical(
+            Rc::new(Variable(Token::new(Identifier, "varname", Nil, 1))),
+            Token::new(Or, "or", Nil, 1),
+            Rc::new(Literal(Number(45.67))),
+        );
+        assert_eq!(expression.to_string(), "(or varname 45.67)");
+
+        let expression = Logical(
+            Rc::new(Literal(Number(45.67))),
+            Token::new(And, "and", Nil, 1),
+            Rc::new(Variable(Token::new(Identifier, "varname", Nil, 1))),
+        );
+        assert_eq!(expression.to_string(), "(and 45.67 varname)");
     }
 
     #[test]

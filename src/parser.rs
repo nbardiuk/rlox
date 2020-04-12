@@ -130,7 +130,7 @@ impl<'a, W: Write> Parser<'a, W> {
 
     fn assignment(&mut self) -> Result<Expr, ParserError> {
         use TokenType::*;
-        let expr = self.equality()?;
+        let expr = self.or()?;
 
         if self.matches(&[Equal]) {
             if let Expr::Variable(name) = expr {
@@ -141,6 +141,32 @@ impl<'a, W: Write> Parser<'a, W> {
         } else {
             Ok(expr)
         }
+    }
+
+    fn or(&mut self) -> Result<Expr, ParserError> {
+        use TokenType::*;
+        let mut expr = self.and()?;
+
+        while self.matches(&[Or]) {
+            let operator = self.previous();
+            let right = self.and()?;
+            expr = Expr::Logical(Rc::new(expr), operator, Rc::new(right));
+        }
+
+        Ok(expr)
+    }
+
+    fn and(&mut self) -> Result<Expr, ParserError> {
+        use TokenType::*;
+        let mut expr = self.equality()?;
+
+        while self.matches(&[And]) {
+            let operator = self.previous();
+            let right = self.equality()?;
+            expr = Expr::Logical(Rc::new(expr), operator, Rc::new(right));
+        }
+
+        Ok(expr)
     }
 
     fn equality(&mut self) -> Result<Expr, ParserError> {
@@ -681,6 +707,28 @@ mod spec {
                 "[line 1] Error at \'else\': Expect expression",
                 "(expr 1)"
             ]
+        );
+    }
+
+    #[test]
+    fn logical() {
+        assert_eq!(parse("1 or 2 or 3;"), vec!["(expr (or (or 1 2) 3))"]);
+        assert_eq!(parse("1 and 2 and 3;"), vec!["(expr (and (and 1 2) 3))"]);
+        assert_eq!(
+            parse("1 or 2 and 3 or 4;"),
+            vec!["(expr (or (or 1 (and 2 3)) 4))"]
+        );
+        assert_eq!(
+            parse("1 and 2 or 3 and 4;"),
+            vec!["(expr (or (and 1 2) (and 3 4)))"]
+        );
+        assert_eq!(
+            parse("1 > 2 or 3 < 4;"),
+            vec!["(expr (or (> 1 2) (< 3 4)))"]
+        );
+        assert_eq!(
+            parse("1 > 2 and 3 < 4;"),
+            vec!["(expr (and (> 1 2) (< 3 4)))"]
         );
     }
 }
