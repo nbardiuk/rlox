@@ -15,12 +15,24 @@ impl Environment {
         }
     }
 
+    pub fn from_global(&self) -> Self {
+        Self {
+            scopes: vec![self.scopes[0].clone(), HashMap::default()],
+        }
+    }
+
     pub fn nest(&mut self) {
         self.scopes.push(HashMap::default());
     }
 
     pub fn unnest(&mut self) {
         self.scopes.pop();
+    }
+
+    pub fn define_global(&mut self, var: &str, value: Value) {
+        if let Some(values) = self.scopes.first_mut() {
+            values.insert(var.to_string(), value);
+        }
     }
 
     pub fn define(&mut self, var: &str, value: Value) {

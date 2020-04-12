@@ -1,4 +1,5 @@
-use crate::interpreter::Interpreter;
+use crate::environment::Environment;
+use crate::interpreter::interpret;
 use crate::interpreter::RuntimeError;
 use crate::parser::Parser;
 use crate::scanner::Scanner;
@@ -39,17 +40,17 @@ impl Lox<Vec<u8>> {
 }
 
 impl<W: Write> Lox<W> {
-    fn run(&mut self, interpreter: &mut Interpreter, source: &str) {
+    fn run(&mut self, env: &mut Environment, source: &str) {
         let mut scanner = Scanner::new(source);
         let tokens = scanner.scan_tokens(self);
         let mut parser = Parser::new(self, tokens);
         let statements = parser.parse();
-        interpreter.interpret(self, statements);
+        interpret(self, env, statements);
     }
 
     pub fn run_file(&mut self, path: &str) -> io::Result<()> {
-        let mut interpreter = Interpreter::new();
-        self.run(&mut interpreter, &fs::read_to_string(path)?);
+        let mut env = Environment::new();
+        self.run(&mut env, &fs::read_to_string(path)?);
         if self.has_error {
             process::exit(65)
         };
@@ -60,7 +61,7 @@ impl<W: Write> Lox<W> {
     }
 
     pub fn run_prompt(&mut self) -> io::Result<()> {
-        let mut interpreter = Interpreter::new();
+        let mut env = Environment::new();
         loop {
             self.print("> ")?;
             self.out.flush()?;
@@ -68,7 +69,7 @@ impl<W: Write> Lox<W> {
             let mut input = String::new();
             io::stdin().read_line(&mut input)?;
 
-            self.run(&mut interpreter, &input);
+            self.run(&mut env, &input);
             self.has_error = false;
         }
     }

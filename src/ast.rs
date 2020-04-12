@@ -6,6 +6,7 @@ use std::fmt::Formatter;
 use std::rc::Rc;
 use std::result::Result;
 
+#[derive(Clone)]
 pub enum Stmt {
     Block(Vec<Stmt>),
     Expression(Rc<Expr>),

@@ -10,126 +10,139 @@ use std::result::Result::{Err, Ok};
 use std::time::Instant;
 use Value::*;
 
-pub struct Interpreter {
-    environment: Environment,
+type Result<T> = std::result::Result<T, RuntimeError>;
+
+pub fn interpret<W: Write>(lox: &mut Lox<W>, env: &mut Environment, statements: Vec<Stmt>) {
+    env.define_global("clock", F(Rc::new(Clock::new())));
+    for stmt in statements {
+        if let Err(e) = execute(lox, env, &stmt) {
+            lox.runtime_error(e);
+            break;
+        }
+    }
 }
 
-impl Interpreter {
-    pub fn new() -> Self {
-        let mut s = Self {
-            environment: Environment::new(),
-        };
-        s.environment.define("clock", F(Rc::new(Clock::new())));
-        s
-    }
+fn execute_block<W: Write>(
+    lox: &mut Lox<W>,
+    env: &mut Environment,
+    statements: &[Stmt],
+) -> Result<()> {
+    statements.iter().try_for_each(|s| execute(lox, env, s))
+}
 
-    pub fn interpret<W: Write>(&mut self, lox: &mut Lox<W>, statements: Vec<Stmt>) {
-        for stmt in statements {
-            if let Err(e) = self.execute(lox, &stmt) {
-                lox.runtime_error(e);
-                break;
+fn execute<W: Write>(lox: &mut Lox<W>, env: &mut Environment, stmt: &Stmt) -> Result<()> {
+    match stmt {
+        Block(statements) => {
+            env.nest();
+            execute_block(lox, env, &statements)?;
+            env.unnest();
+        }
+        Expression(expression) => {
+            evaluate(lox, env, &expression).map(|_| ())?;
+        }
+        Function(name, params, body) => env.define(
+            &name.lexeme,
+            F(Rc::new(Function {
+                name: name.clone(),
+                params: params.clone(),
+                body: body.to_vec(),
+            })),
+        ),
+        If(condition, then, r#else) => {
+            if is_truthy(&evaluate(lox, env, &condition)?) {
+                execute(lox, env, &then)?;
+            } else if let Some(els) = r#else {
+                execute(lox, env, &els)?;
+            }
+        }
+        Print(expression) => {
+            let val = evaluate(lox, env, &expression)?;
+            lox.println(&val.to_string());
+        }
+        Var(name, initializer) => match initializer {
+            Some(i) => {
+                let value = evaluate(lox, env, &i)?;
+                env.define(&name.lexeme, value)
+            }
+            _ => env.define(&name.lexeme, V(Nil)),
+        },
+        While(condition, body) => {
+            while is_truthy(&evaluate(lox, env, &condition)?) {
+                execute(lox, env, &body)?
             }
         }
     }
+    Ok(())
+}
 
-    fn execute<W: Write>(&mut self, lox: &mut Lox<W>, stmt: &Stmt) -> Result<(), RuntimeError> {
-        match stmt {
-            Block(statements) => {
-                self.environment.nest();
-                statements.iter().try_for_each(|s| self.execute(lox, s))?;
-                self.environment.unnest();
-            }
-            Expression(expression) => {
-                self.evaluate(expression).map(|_| ())?;
-            }
-            Function(name, params, body) => {} // TODO
-            If(condition, then, r#else) => {
-                if is_truthy(&self.evaluate(condition)?) {
-                    self.execute(lox, then)?;
-                } else if let Some(els) = r#else {
-                    self.execute(lox, els)?;
-                }
-            }
-            Print(expression) => {
-                let val = self.evaluate(expression)?;
-                lox.println(&val.to_string());
-            }
-            Var(name, initializer) => match initializer {
-                Some(i) => {
-                    let value = self.evaluate(i)?;
-                    self.environment.define(&name.lexeme, value)
-                }
-                _ => self.environment.define(&name.lexeme, V(Nil)),
-            },
-            While(condition, body) => {
-                while is_truthy(&self.evaluate(condition)?) {
-                    self.execute(lox, body)?
-                }
+fn evaluate<W: Write>(lox: &mut Lox<W>, env: &mut Environment, expr: &Expr) -> Result<Value> {
+    match expr {
+        Asign(name, value) => {
+            let value = evaluate(lox, env, value)?;
+            env.assign(name, value)
+        }
+        Binary(left, op, right) => {
+            match (
+                op.typ,
+                evaluate(lox, env, left)?,
+                evaluate(lox, env, right)?,
+            ) {
+                (t::BangEqual, V(a), V(b)) => Ok(V(Bool(a != b))),
+                (t::EqualEqual, V(a), V(b)) => Ok(V(Bool(a == b))),
+                (t::Greater, V(Number(a)), V(Number(b))) => Ok(V(Bool(a > b))),
+                (t::GreaterEqual, V(Number(a)), V(Number(b))) => Ok(V(Bool(a >= b))),
+                (t::Less, V(Number(a)), V(Number(b))) => Ok(V(Bool(a < b))),
+                (t::LessEqual, V(Number(a)), V(Number(b))) => Ok(V(Bool(a <= b))),
+                (t::Minus, V(Number(a)), V(Number(b))) => Ok(V(Number(a - b))),
+                (t::Plus, V(Number(a)), V(Number(b))) => Ok(V(Number(a + b))),
+                (t::Plus, V(String(a)), V(String(b))) => Ok(V(String(a + &b))),
+                (t::Plus, _, _) => err(op, "Operands must be two numbers or two strings"),
+                (t::Slash, V(Number(a)), V(Number(b))) => Ok(V(Number(a / b))),
+                (t::Star, V(Number(a)), V(Number(b))) => Ok(V(Number(a * b))),
+                _ => err(op, "Operands must be numbers"),
             }
         }
-        Ok(())
-    }
-
-    fn evaluate(&mut self, expr: &Expr) -> Result<Value, RuntimeError> {
-        match expr {
-            Asign(name, value) => {
-                let value = self.evaluate(value)?;
-                self.environment.assign(name, value)
-            }
-            Binary(left, op, right) => {
-                match (op.typ, self.evaluate(left)?, self.evaluate(right)?) {
-                    (t::BangEqual, V(a), V(b)) => Ok(V(Bool(a != b))),
-                    (t::EqualEqual, V(a), V(b)) => Ok(V(Bool(a == b))),
-                    (t::Greater, V(Number(a)), V(Number(b))) => Ok(V(Bool(a > b))),
-                    (t::GreaterEqual, V(Number(a)), V(Number(b))) => Ok(V(Bool(a >= b))),
-                    (t::Less, V(Number(a)), V(Number(b))) => Ok(V(Bool(a < b))),
-                    (t::LessEqual, V(Number(a)), V(Number(b))) => Ok(V(Bool(a <= b))),
-                    (t::Minus, V(Number(a)), V(Number(b))) => Ok(V(Number(a - b))),
-                    (t::Plus, V(Number(a)), V(Number(b))) => Ok(V(Number(a + b))),
-                    (t::Plus, V(String(a)), V(String(b))) => Ok(V(String(a + &b))),
-                    (t::Plus, _, _) => err(op, "Operands must be two numbers or two strings"),
-                    (t::Slash, V(Number(a)), V(Number(b))) => Ok(V(Number(a / b))),
-                    (t::Star, V(Number(a)), V(Number(b))) => Ok(V(Number(a * b))),
-                    _ => err(op, "Operands must be numbers"),
-                }
-            }
-            Call(callee, paren, args) => {
-                if let F(callee) = self.evaluate(callee)? {
-                    if args.len() != callee.arity() {
-                        let message = format!(
-                            "Expected {} arguments but got {}.",
-                            callee.arity(),
-                            args.len()
-                        );
-                        err(paren, &message)
-                    } else {
-                        let mut ars = vec![];
-                        for arg in args {
-                            ars.push(self.evaluate(arg)?);
-                        }
-                        callee.call(self, paren, &ars)
-                    }
+        Call(callee, paren, args) => {
+            if let F(callee) = evaluate(lox, env, callee)? {
+                if args.len() != callee.arity() {
+                    let message = format!(
+                        "Expected {} arguments but got {}.",
+                        callee.arity(),
+                        args.len()
+                    );
+                    err(paren, &message)
                 } else {
-                    err(paren, "Can only call functions and classes.")
+                    let mut ars = vec![];
+                    for arg in args {
+                        ars.push(evaluate(lox, env, arg)?);
+                    }
+                    callee.call(
+                        &mut |env, body| execute_block(lox, env, body),
+                        &mut env.from_global(), // FIXME do not copy, change
+                        paren,
+                        &ars,
+                    )
                 }
+            } else {
+                err(paren, "Can only call functions and classes.")
             }
-            Grouping(expression) => self.evaluate(&expression),
-            Literal(value) => Ok(V(value.clone())),
-            Logical(left, op, right) => {
-                let left = self.evaluate(left)?;
-                match (op.typ, is_truthy(&left)) {
-                    (t::And, false) => Ok(left),
-                    (t::Or, true) => Ok(left),
-                    _ => self.evaluate(right),
-                }
-            }
-            Unary(op, right) => match (op.typ, self.evaluate(right)?) {
-                (t::Bang, r) => Ok(V(Bool(!is_truthy(&r)))),
-                (t::Minus, V(Number(d))) => Ok(V(Number(-d))),
-                _ => err(op, "Operand must be a number"),
-            },
-            Variable(name) => self.environment.get(name),
         }
+        Grouping(expression) => evaluate(lox, env, &expression),
+        Literal(value) => Ok(V(value.clone())),
+        Logical(left, op, right) => {
+            let left = evaluate(lox, env, left)?;
+            match (op.typ, is_truthy(&left)) {
+                (t::And, false) => Ok(left),
+                (t::Or, true) => Ok(left),
+                _ => evaluate(lox, env, right),
+            }
+        }
+        Unary(op, right) => match (op.typ, evaluate(lox, env, right)?) {
+            (t::Bang, r) => Ok(V(Bool(!is_truthy(&r)))),
+            (t::Minus, V(Number(d))) => Ok(V(Number(-d))),
+            _ => err(op, "Operand must be a number"),
+        },
+        Variable(name) => env.get(name),
     }
 }
 
@@ -151,10 +164,11 @@ impl fmt::Display for Value {
 pub trait Callable: fmt::Display {
     fn call(
         &self,
-        interpreter: &Interpreter,
+        execute_block: &mut dyn FnMut(&mut Environment, &[Stmt]) -> Result<()>,
+        env: &mut Environment,
         paren: &Token,
         args: &[Value],
-    ) -> Result<Value, RuntimeError>;
+    ) -> Result<Value>;
 
     fn arity(&self) -> usize;
 }
@@ -174,7 +188,13 @@ impl Callable for Clock {
         0
     }
 
-    fn call(&self, _: &Interpreter, _: &Token, _: &[Value]) -> Result<Value, RuntimeError> {
+    fn call(
+        &self,
+        _: &mut dyn FnMut(&mut Environment, &[Stmt]) -> Result<()>,
+        _: &mut Environment,
+        _: &Token,
+        _: &[Value],
+    ) -> Result<Value> {
         let now = Instant::now();
         Ok(V(Number(now.duration_since(self.start).as_secs_f64())))
     }
@@ -183,6 +203,39 @@ impl Callable for Clock {
 impl fmt::Display for Clock {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "clock")
+    }
+}
+
+struct Function {
+    name: Token,
+    params: Vec<Token>,
+    body: Vec<Stmt>,
+}
+
+impl fmt::Display for Function {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "f#{}", self.name,)
+    }
+}
+
+impl Callable for Function {
+    fn call(
+        &self,
+        execute_block: &mut dyn FnMut(&mut Environment, &[Stmt]) -> Result<()>,
+        env: &mut Environment,
+        _: &Token,
+        args: &[Value],
+    ) -> Result<Value> {
+        let defs = self.params.iter().zip(args.iter());
+        defs.for_each(|(param, arg)| env.define(&param.lexeme, arg.clone()));
+
+        execute_block(env, &self.body)?;
+
+        Ok(V(Nil))
+    }
+
+    fn arity(&self) -> usize {
+        self.params.len()
     }
 }
 
@@ -201,7 +254,7 @@ impl RuntimeError {
     }
 }
 
-pub fn err<T>(token: &Token, message: &str) -> Result<T, RuntimeError> {
+pub fn err<T>(token: &Token, message: &str) -> Result<T> {
     Err(RuntimeError::new(token, message))
 }
 
@@ -225,7 +278,7 @@ mod spec {
         let tokens = scanner.scan_tokens(&mut lox);
         let mut parser = Parser::new(&mut lox, tokens);
         let statements = parser.parse();
-        Interpreter::new().interpret(&mut lox, statements);
+        interpret(&mut lox, &mut Environment::new(), statements);
         lox.output()
     }
 
@@ -666,6 +719,59 @@ mod spec {
         assert_eq!(
             run("\"not a fun\"();"),
             "[line 1] Can only call functions and classes.\n"
+        );
+    }
+
+    #[test]
+    fn function() {
+        assert_eq!(
+            run("fun add() {}
+                 print add;"),
+            "f#add\n"
+        );
+        assert_eq!(
+            run("fun add(a, b, c) {
+                   print a + b + c;
+                 }
+                 add(1, 2, 3);"),
+            "6\n"
+        );
+        assert_eq!(
+            run("fun count(n) {
+                   if (n > 1) count(n - 1);
+                   print n;
+                 }
+                 count(3);"),
+            "1\n\
+             2\n\
+             3\n"
+        );
+        assert_eq!(
+            run("fun a() {
+                   var c = 0;
+                 }
+                 print c;"),
+            "[line 4] Undefined variable \'c\'.\n"
+        );
+        assert_eq!(
+            run("fun a() {
+                   print c;
+                 }
+                 {
+                   var c = 0;
+                   a();
+                 }"),
+            "[line 2] Undefined variable \'c\'.\n"
+        );
+        assert_eq!(
+            run("var c = 0;
+                 fun f() { print c = c + 1; }
+                 f();
+                 f();
+                 f();"),
+            "1\n\
+             2\n\
+             3\n"
         );
     }
 }
