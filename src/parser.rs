@@ -66,7 +66,9 @@ impl<'a, W: Write> Parser<'a, W> {
 
     fn statement(&mut self) -> Result<Stmt, ParserError> {
         use TokenType::*;
-        if self.matches(&[If]) {
+        if self.matches(&[For]) {
+            self.for_statement()
+        } else if self.matches(&[If]) {
             self.if_statement()
         } else if self.matches(&[Print]) {
             self.print_statement()
@@ -95,6 +97,45 @@ impl<'a, W: Write> Parser<'a, W> {
         };
 
         Ok(Stmt::If(condition, then, r#else))
+    }
+
+    fn for_statement(&mut self) -> Result<Stmt, ParserError> {
+        use TokenType::*;
+
+        self.consume(LeftParen, "Expect '(' after for.")?;
+
+        let initializer = if self.matches(&[Semicolon]) {
+            None
+        } else if self.matches(&[Var]) {
+            Some(self.var_declaration()?)
+        } else {
+            Some(self.expression_statement()?)
+        };
+
+        let condition = if !self.check(Semicolon) {
+            self.expression()?
+        } else {
+            Expr::Literal(crate::token::Literal::Bool(true))
+        };
+        self.consume(Semicolon, "Expect ';' after loop condition.")?;
+
+        let increment = if !self.check(RightParen) {
+            Some(Rc::new(self.expression()?))
+        } else {
+            None
+        };
+        self.consume(RightParen, "Expect ')' after for clauses.")?;
+
+        let mut body = self.statement()?;
+        if let Some(inc) = increment {
+            body = Stmt::Block(vec![body, Stmt::Expression(inc)]);
+        }
+        body = Stmt::While(Rc::new(condition), Rc::new(body));
+        if let Some(init) = initializer {
+            body = Stmt::Block(vec![init, body]);
+        }
+
+        Ok(body)
     }
 
     fn while_statement(&mut self) -> Result<Stmt, ParserError> {
@@ -765,6 +806,58 @@ mod spec {
             parse("while (print 1;) {}"),
             vec![
                 "[line 1] Error at \'print\': Expect expression",
+                "[line 1] Error at \')\': Expect expression"
+            ]
+        );
+    }
+    #[test]
+    fn fors() {
+        assert_eq!(parse("for (;;) {}"), vec!["(while true (do ))"]);
+        assert_eq!(
+            parse("for (var i=1;;) {}"),
+            vec![
+                "(do (def i 1) \
+                     (while true (do )))"
+            ]
+        );
+        assert_eq!(parse("for (;a<b;) {}"), vec!["(while (< a b) (do ))"]);
+        assert_eq!(
+            parse("for (;;c=c+1) {}"),
+            vec![
+                "(while true \
+                        (do (do ) \
+                            (expr (set! c (+ c 1)))))"
+            ]
+        );
+        assert_eq!(
+            parse("for (var i=0;i<10;i=i+1) print i;"),
+            vec![
+                "(do (def i 0) \
+                     (while (< i 10) \
+                            (do (print i) \
+                                (expr (set! i (+ i 1))))))"
+            ]
+        );
+        assert_eq!(
+            parse("for () {}"),
+            vec!["[line 1] Error at \')\': Expect expression"]
+        );
+        assert_eq!(
+            parse("for (1) {}"),
+            vec!["[line 1] Error at \')\': Expect \';\' after value."]
+        );
+        assert_eq!(
+            parse("for (1;) {}"),
+            vec!["[line 1] Error at \')\': Expect expression"]
+        );
+        assert_eq!(
+            parse("for (1;2) {}"),
+            vec!["[line 1] Error at \')\': Expect \';\' after loop condition."]
+        );
+        assert_eq!(
+            parse("for (1;2;3;) {}"),
+            vec![
+                "[line 1] Error at \';\': Expect \')\' after for clauses.",
                 "[line 1] Error at \')\': Expect expression"
             ]
         );

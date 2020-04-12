@@ -496,4 +496,47 @@ mod spec {
             "[line 1] Undefined variable \'FAIL\'.\n"
         );
     }
+    #[test]
+    fn fors() {
+        assert_eq!(
+            run("for(var i=0;i<10;i=i+1)print i;"),
+            "0\n\
+             1\n\
+             2\n\
+             3\n\
+             4\n\
+             5\n\
+             6\n\
+             7\n\
+             8\n\
+             9\n"
+        );
+        assert_eq!(run("for(;false;) FAIL; print 1;"), "1\n");
+        assert_eq!(
+            run("for(;true;FAIL) BREAK; print 1;"),
+            "[line 1] Undefined variable \'BREAK\'.\n"
+        );
+        assert_eq!(
+            run("for(;true;FAIL) print 0; print 1;"),
+            "0\n\
+            [line 1] Undefined variable \'FAIL\'.\n"
+        );
+        assert_eq!(
+            run("for(FAIL;true;) print 0; print 1;"),
+            "[line 1] Undefined variable \'FAIL\'.\n"
+        );
+        assert_eq!(
+            run("var i;for(i=0;i<3;i=i+1)print i;"),
+            "0\n\
+             1\n\
+             2\n"
+        );
+        assert_eq!(
+            run("var i=true;for(var i=0;i<3;i=i+1)print i;print i;"),
+            "0\n\
+             1\n\
+             2\n\
+             true\n"
+        );
+    }
 }
