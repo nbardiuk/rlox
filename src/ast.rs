@@ -9,6 +9,7 @@ use std::result::Result;
 pub enum Stmt {
     Block(Vec<Stmt>),
     Expression(Rc<Expr>),
+    Function(Token, Vec<Token>, Vec<Stmt>),
     If(Rc<Expr>, Rc<Stmt>, Option<Rc<Stmt>>),
     Print(Rc<Expr>),
     Var(Token, Option<Rc<Expr>>),
@@ -26,17 +27,30 @@ pub enum Expr {
     Variable(Token),
 }
 
+impl Display for Token {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
+        write!(f, "{}", self.lexeme)
+    }
+}
+
 impl Display for Stmt {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
         use Stmt::*;
         match self {
             Block(statemets) => write!(f, "(do {})", join(statemets, " ")),
             Expression(expr) => write!(f, "(expr {})", expr),
+            Function(name, params, body) => write!(
+                f,
+                "(defn {} ({}) {})",
+                name,
+                join(params, " "),
+                join(body, " ")
+            ),
             If(cond, then, None) => write!(f, "(if {} {})", cond, then),
             If(cond, then, Some(r#else)) => write!(f, "(if {} {} {})", cond, then, r#else),
             Print(expr) => write!(f, "(print {})", expr),
-            Var(name, None) => write!(f, "(def {})", name.lexeme),
-            Var(name, Some(init)) => write!(f, "(def {} {})", name.lexeme, init),
+            Var(name, None) => write!(f, "(def {})", name),
+            Var(name, Some(init)) => write!(f, "(def {} {})", name, init),
             While(cond, body) => write!(f, "(while {} {})", cond, body),
         }
     }
@@ -46,14 +60,14 @@ impl Display for Expr {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
         use Expr::*;
         match self {
-            Asign(name, value) => write!(f, "(set! {} {})", name.lexeme, value),
-            Binary(left, op, right) => write!(f, "({} {} {})", op.lexeme, left, right),
-            Call(callee, _, args) => write!(f, "({} {})", callee, join(args, " ")), // TODO paren???
+            Asign(name, value) => write!(f, "(set! {} {})", name, value),
+            Binary(left, op, right) => write!(f, "({} {} {})", op, left, right),
+            Call(callee, _, args) => write!(f, "({} {})", callee, join(args, " ")),
             Grouping(expr) => write!(f, "(group {})", expr),
             Literal(value) => write!(f, "{}", value),
-            Logical(left, op, right) => write!(f, "({} {} {})", op.lexeme, left, right),
-            Unary(op, right) => write!(f, "({} {})", op.lexeme, right),
-            Variable(name) => write!(f, "{}", name.lexeme),
+            Logical(left, op, right) => write!(f, "({} {} {})", op, left, right),
+            Unary(op, right) => write!(f, "({} {})", op, right),
+            Variable(name) => write!(f, "{}", name),
         }
     }
 }

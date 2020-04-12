@@ -6,6 +6,8 @@ use crate::token::TokenType;
 use std::io::Write;
 use std::rc::Rc;
 
+const MAX_ARGS: usize = 255;
+
 #[derive(Debug)]
 struct ParserError {}
 
@@ -36,7 +38,9 @@ impl<'a, W: Write> Parser<'a, W> {
 
     fn declaration(&mut self) -> Option<Stmt> {
         use TokenType::*;
-        let statement = if self.matches(&[Var]) {
+        let statement = if self.matches(&[Fun]) {
+            self.function("function")
+        } else if self.matches(&[Var]) {
             self.var_declaration()
         } else {
             self.statement()
@@ -47,6 +51,34 @@ impl<'a, W: Write> Parser<'a, W> {
         }
 
         statement.ok()
+    }
+
+    fn function(&mut self, kind: &str) -> Result<Stmt, ParserError> {
+        use TokenType::*;
+        let name = self.consume(Identifier, &format!("Expect {} name.", kind))?;
+
+        self.consume(LeftParen, &format!("Expect '(' after {} name.", kind))?;
+        let mut parameters = vec![];
+        if !self.check(RightParen) {
+            loop {
+                if parameters.len() >= MAX_ARGS {
+                    return self.error(
+                        self.peek(),
+                        &format!("Cannot have more than {} parameters.", MAX_ARGS),
+                    );
+                }
+                parameters.push(self.consume(Identifier, "Expect parameter name.")?);
+                if !self.matches(&[Comma]) {
+                    break;
+                }
+            }
+        }
+        self.consume(RightParen, "Expect ')' after parameters.")?;
+
+        self.consume(LeftBrace, &format!("Expect '{{' before {} body.", kind))?;
+        let body = self.block()?;
+
+        Ok(Stmt::Function(name, parameters, body))
     }
 
     fn var_declaration(&mut self) -> Result<Stmt, ParserError> {
@@ -302,8 +334,11 @@ impl<'a, W: Write> Parser<'a, W> {
         let mut args = vec![];
         if !self.check(RightParen) {
             loop {
-                if args.len() >= 255 {
-                    return self.error(self.peek(), "Cannot have more than 255 arguments.");
+                if args.len() >= MAX_ARGS {
+                    return self.error(
+                        self.peek(),
+                        &format!("Cannot have more than {} arguments.", MAX_ARGS),
+                    );
                 }
                 args.push(self.expression()?);
                 if !self.matches(&[Comma]) {
@@ -346,14 +381,14 @@ impl<'a, W: Write> Parser<'a, W> {
         }
     }
 
-    fn consume(&mut self, typ: TokenType, message: &'a str) -> Result<Token, ParserError> {
+    fn consume(&mut self, typ: TokenType, message: &str) -> Result<Token, ParserError> {
         if self.check(typ) {
             return Ok(self.advance());
         }
         self.error(self.peek(), message)
     }
 
-    fn error<T>(&mut self, token: Token, message: &'a str) -> Result<T, ParserError> {
+    fn error<T>(&mut self, token: Token, message: &str) -> Result<T, ParserError> {
         self.lox.error_token(token, message);
         Err(ParserError {})
     }
@@ -935,5 +970,55 @@ mod spec {
         1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
         1,1,1,1,1,1
             );"), vec!["[line 7] Error at \'1\': Cannot have more than 255 arguments."]);
+    }
+
+    #[test]
+    fn function_declaration() {
+        assert_eq!(parse("fun a(){}"), vec!["(defn a () )"]);
+        assert_eq!(parse("fun a(a,b,c){}"), vec!["(defn a (a b c) )"]);
+        assert_eq!(
+            parse("fun a(){a; b;}"),
+            vec!["(defn a () (expr a) (expr b))"]
+        );
+        assert_eq!(
+            parse("fun a(1){}"),
+            vec!["[line 1] Error at \'1\': Expect parameter name."]
+        );
+        assert_eq!(
+            parse("fun a(a b){}"),
+            vec!["[line 1] Error at \'b\': Expect \')\' after parameters."]
+        );
+        assert_eq!(
+            parse("fun (){}"),
+            vec!["[line 1] Error at \'(\': Expect function name."]
+        );
+        assert_eq!(
+            parse("fun a{}"),
+            vec!["[line 1] Error at \'{\': Expect \'(\' after function name."]
+        );
+        assert_eq!(
+            parse("fun a();"),
+            vec!["[line 1] Error at \';\': Expect \'{\' before function body."]
+        );
+        assert_eq!(parse("fun a(
+        b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,
+        b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,
+        b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,
+        b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,
+        b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,
+        b,b,b,b,b){}"), vec!["(defn a (\
+        b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b \
+        b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b \
+        b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b \
+        b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b \
+        b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b b \
+        b b b b b) )"]);
+        assert_eq!(parse("fun a(
+        b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,
+        b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,
+        b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,
+        b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,
+        b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,
+        b,b,b,b,b,b){}"), vec!["[line 7] Error at \'b\': Cannot have more than 255 parameters."]);
     }
 }

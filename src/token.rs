@@ -22,12 +22,6 @@ impl Token {
     }
 }
 
-impl Display for Token {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
-        write!(f, "{:?} {} {}", self.typ, self.lexeme, self.literal)
-    }
-}
-
 #[derive(Clone, Debug, PartialEq)]
 pub enum Literal {
     Bool(bool),

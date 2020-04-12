@@ -42,6 +42,7 @@ impl Interpreter {
             Expression(expression) => {
                 self.evaluate(expression).map(|_| ())?;
             }
+            Function(name, params, body) => {} // TODO
             If(condition, then, r#else) => {
                 if is_truthy(&self.evaluate(condition)?) {
                     self.execute(lox, then)?;
@@ -643,8 +644,8 @@ mod spec {
 
     #[test]
     fn function_call() {
-        assert_eq!(run("print clock() > 0 and clock() < 0.0001;"), "true\n");
-        assert_eq!(run("var f = clock; print f() < 0.0001;"), "true\n");
+        assert_eq!(run("print clock() > 0 and clock() < 0.1;"), "true\n");
+        assert_eq!(run("var f = clock; print f() < 0.1;"), "true\n");
         assert_eq!(run("A(B,C);"), "[line 1] Undefined variable \'A\'.\n");
         assert_eq!(
             run("clock(B,C);"),
