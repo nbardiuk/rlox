@@ -1,11 +1,11 @@
 use crate::interpreter::err;
 use crate::interpreter::RuntimeError;
-use crate::token::Literal;
+use crate::interpreter::Value;
 use crate::token::Token;
 use std::collections::HashMap;
 
 pub struct Environment {
-    scopes: Vec<HashMap<String, Literal>>,
+    scopes: Vec<HashMap<String, Value>>,
 }
 
 impl Environment {
@@ -23,14 +23,13 @@ impl Environment {
         self.scopes.pop();
     }
 
-    pub fn define(&mut self, token: &Token, value: Literal) {
-        let var = &token.lexeme;
+    pub fn define(&mut self, var: &str, value: Value) {
         if let Some(values) = self.scopes.last_mut() {
-            values.insert(var.clone(), value);
+            values.insert(var.to_string(), value);
         }
     }
 
-    pub fn assign(&mut self, token: &Token, value: Literal) -> Result<Literal, RuntimeError> {
+    pub fn assign(&mut self, token: &Token, value: Value) -> Result<Value, RuntimeError> {
         let var = &token.lexeme;
         for values in self.scopes.iter_mut().rev() {
             if values.contains_key(var) {
@@ -41,7 +40,7 @@ impl Environment {
         err(&token, &format!("Undefined variable '{}'.", var))
     }
 
-    pub fn get(&self, token: &Token) -> Result<Literal, RuntimeError> {
+    pub fn get(&self, token: &Token) -> Result<Value, RuntimeError> {
         let var = &token.lexeme;
         for values in self.scopes.iter().rev() {
             if let Some(value) = values.get(var) {

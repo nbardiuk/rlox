@@ -3,8 +3,11 @@ use crate::ast::Stmt::{self, *};
 use crate::environment::Environment;
 use crate::lox::Lox;
 use crate::token::{self, Literal::*, Token, TokenType as t};
+use std::fmt;
 use std::io::Write;
+use std::rc::Rc;
 use std::result::Result::{Err, Ok};
+use Value::*;
 
 pub struct Interpreter {
     environment: Environment,
@@ -12,9 +15,11 @@ pub struct Interpreter {
 
 impl Interpreter {
     pub fn new() -> Self {
-        Self {
+        let mut s = Self {
             environment: Environment::new(),
-        }
+        };
+        s.environment.define("clock", F(Rc::new(Clock {})));
+        s
     }
 
     pub fn interpret<W: Write>(&mut self, lox: &mut Lox<W>, statements: Vec<Stmt>) {
@@ -50,9 +55,9 @@ impl Interpreter {
             Var(name, initializer) => match initializer {
                 Some(i) => {
                     let value = self.evaluate(i)?;
-                    self.environment.define(name, value)
+                    self.environment.define(&name.lexeme, value)
                 }
-                _ => self.environment.define(name, Nil),
+                _ => self.environment.define(&name.lexeme, V(Nil)),
             },
             While(condition, body) => {
                 while is_truthy(&self.evaluate(condition)?) {
@@ -63,7 +68,7 @@ impl Interpreter {
         Ok(())
     }
 
-    fn evaluate(&mut self, expr: &Expr) -> Result<token::Literal, RuntimeError> {
+    fn evaluate(&mut self, expr: &Expr) -> Result<Value, RuntimeError> {
         match expr {
             Asign(name, value) => {
                 let value = self.evaluate(value)?;
@@ -71,31 +76,43 @@ impl Interpreter {
             }
             Binary(left, op, right) => {
                 match (op.typ, self.evaluate(left)?, self.evaluate(right)?) {
-                    (t::BangEqual, a, b) => Ok(Bool(a != b)),
-                    (t::EqualEqual, a, b) => Ok(Bool(a == b)),
-                    (t::Greater, Number(a), Number(b)) => Ok(Bool(a > b)),
-                    (t::GreaterEqual, Number(a), Number(b)) => Ok(Bool(a >= b)),
-                    (t::Less, Number(a), Number(b)) => Ok(Bool(a < b)),
-                    (t::LessEqual, Number(a), Number(b)) => Ok(Bool(a <= b)),
-                    (t::Minus, Number(a), Number(b)) => Ok(Number(a - b)),
-                    (t::Plus, Number(a), Number(b)) => Ok(Number(a + b)),
-                    (t::Plus, String(a), String(b)) => Ok(String(a + &b)),
+                    (t::BangEqual, V(a), V(b)) => Ok(V(Bool(a != b))),
+                    (t::EqualEqual, V(a), V(b)) => Ok(V(Bool(a == b))),
+                    (t::Greater, V(Number(a)), V(Number(b))) => Ok(V(Bool(a > b))),
+                    (t::GreaterEqual, V(Number(a)), V(Number(b))) => Ok(V(Bool(a >= b))),
+                    (t::Less, V(Number(a)), V(Number(b))) => Ok(V(Bool(a < b))),
+                    (t::LessEqual, V(Number(a)), V(Number(b))) => Ok(V(Bool(a <= b))),
+                    (t::Minus, V(Number(a)), V(Number(b))) => Ok(V(Number(a - b))),
+                    (t::Plus, V(Number(a)), V(Number(b))) => Ok(V(Number(a + b))),
+                    (t::Plus, V(String(a)), V(String(b))) => Ok(V(String(a + &b))),
                     (t::Plus, _, _) => err(op, "Operands must be two numbers or two strings"),
-                    (t::Slash, Number(a), Number(b)) => Ok(Number(a / b)),
-                    (t::Star, Number(a), Number(b)) => Ok(Number(a * b)),
+                    (t::Slash, V(Number(a)), V(Number(b))) => Ok(V(Number(a / b))),
+                    (t::Star, V(Number(a)), V(Number(b))) => Ok(V(Number(a * b))),
                     _ => err(op, "Operands must be numbers"),
                 }
             }
             Call(callee, paren, args) => {
-                let callee = self.evaluate(callee)?;
-                let mut ars = vec![];
-                for arg in args {
-                    ars.push(self.evaluate(arg)?);
+                if let F(callee) = self.evaluate(callee)? {
+                    if args.len() != callee.arity() {
+                        let message = format!(
+                            "Expected {} arguments but got {}.",
+                            callee.arity(),
+                            args.len()
+                        );
+                        err(paren, &message)
+                    } else {
+                        let mut ars = vec![];
+                        for arg in args {
+                            ars.push(self.evaluate(arg)?);
+                        }
+                        callee.call(self, paren, &ars)
+                    }
+                } else {
+                    err(paren, "Can only call functions and classes.")
                 }
-                callee.call(self, paren, &ars)
             }
             Grouping(expression) => self.evaluate(&expression),
-            Literal(value) => Ok(value.clone()),
+            Literal(value) => Ok(V(value.clone())),
             Logical(left, op, right) => {
                 let left = self.evaluate(left)?;
                 match (op.typ, is_truthy(&left)) {
@@ -105,8 +122,8 @@ impl Interpreter {
                 }
             }
             Unary(op, right) => match (op.typ, self.evaluate(right)?) {
-                (t::Bang, r) => Ok(Bool(!is_truthy(&r))),
-                (t::Minus, Number(d)) => Ok(Number(-d)),
+                (t::Bang, r) => Ok(V(Bool(!is_truthy(&r)))),
+                (t::Minus, V(Number(d))) => Ok(V(Number(-d))),
                 _ => err(op, "Operand must be a number"),
             },
             Variable(name) => self.environment.get(name),
@@ -114,23 +131,51 @@ impl Interpreter {
     }
 }
 
-trait Callable {
+#[derive(Clone)]
+pub enum Value {
+    V(token::Literal),
+    F(Rc<dyn Callable>),
+}
+
+impl fmt::Display for Value {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            V(l) => write!(f, "{}", l),
+            F(c) => write!(f, "{}", c),
+        }
+    }
+}
+
+pub trait Callable: fmt::Display {
     fn call(
         &self,
         interpreter: &Interpreter,
         paren: &Token,
-        args: &[token::Literal],
-    ) -> Result<token::Literal, RuntimeError>;
+        args: &[Value],
+    ) -> Result<Value, RuntimeError>;
+
+    fn arity(&self) -> usize;
 }
 
-impl Callable for token::Literal {
-    fn call(
-        &self,
-        _: &Interpreter,
-        paren: &Token,
-        _: &[token::Literal],
-    ) -> Result<token::Literal, RuntimeError> {
-        err(paren, "Can only call functions and classes.")
+struct Clock {}
+impl Callable for Clock {
+    fn arity(&self) -> usize {
+        0
+    }
+
+    fn call(&self, _: &Interpreter, _: &Token, _: &[Value]) -> Result<Value, RuntimeError> {
+        use std::time::{SystemTime, UNIX_EPOCH};
+        let start = SystemTime::now();
+        let since_the_epoch = start
+            .duration_since(UNIX_EPOCH)
+            .expect("Time went backwards");
+        Ok(V(Number(since_the_epoch.as_secs_f64())))
+    }
+}
+
+impl fmt::Display for Clock {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "clock")
     }
 }
 
@@ -153,10 +198,10 @@ pub fn err<T>(token: &Token, message: &str) -> Result<T, RuntimeError> {
     Err(RuntimeError::new(token, message))
 }
 
-fn is_truthy(l: &token::Literal) -> bool {
-    match l {
-        Nil => false,
-        Bool(b) => *b,
+fn is_truthy(v: &Value) -> bool {
+    match v {
+        V(Nil) => false,
+        V(Bool(b)) => *b,
         _ => true,
     }
 }
@@ -564,9 +609,12 @@ mod spec {
 
     #[test]
     fn function_call() {
+        assert_eq!(run("print clock() < clock();"), "true\n");
         assert_eq!(run("A(B,C);"), "[line 1] Undefined variable \'A\'.\n");
-        assert_eq!(run("1(B,C);"), "[line 1] Undefined variable \'B\'.\n");
-        assert_eq!(run("1(2,C);"), "[line 1] Undefined variable \'C\'.\n");
+        assert_eq!(
+            run("clock(B,C);"),
+            "[line 1] Expected 0 arguments but got 2.\n"
+        );
         assert_eq!(
             run("1();"),
             "[line 1] Can only call functions and classes.\n"
