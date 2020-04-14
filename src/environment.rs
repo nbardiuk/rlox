@@ -2,63 +2,63 @@ use crate::interpreter::err;
 use crate::interpreter::RuntimeError;
 use crate::interpreter::Value;
 use crate::token::Token;
+use std::cell::RefCell;
 use std::collections::HashMap;
+use std::rc::Rc;
+
+pub type EnvRef = Rc<RefCell<Environment>>;
 
 pub struct Environment {
-    scopes: Vec<HashMap<String, Value>>,
+    enclosing: Option<Rc<RefCell<Environment>>>,
+    values: HashMap<String, Value>,
 }
 
 impl Environment {
-    pub fn new() -> Self {
-        Self {
-            scopes: vec![HashMap::default()],
+    pub fn new() -> EnvRef {
+        Rc::new(RefCell::new(Self {
+            enclosing: None,
+            values: HashMap::default(),
+        }))
+    }
+
+    pub fn global(env: EnvRef) -> EnvRef {
+        match &env.clone().borrow().enclosing {
+            Some(g) => Environment::global(g.clone()),
+            None => env,
         }
     }
 
-    pub fn from_global(&self) -> Self {
-        Self {
-            scopes: vec![self.scopes[0].clone(), HashMap::default()],
-        }
-    }
-
-    pub fn nest(&mut self) {
-        self.scopes.push(HashMap::default());
-    }
-
-    pub fn unnest(&mut self) {
-        self.scopes.pop();
-    }
-
-    pub fn define_global(&mut self, var: &str, value: Value) {
-        if let Some(values) = self.scopes.first_mut() {
-            values.insert(var.to_string(), value);
-        }
+    pub fn nested(enclosing: EnvRef) -> EnvRef {
+        Rc::new(RefCell::new(Self {
+            enclosing: Some(enclosing),
+            values: HashMap::default(),
+        }))
     }
 
     pub fn define(&mut self, var: &str, value: Value) {
-        if let Some(values) = self.scopes.last_mut() {
-            values.insert(var.to_string(), value);
-        }
+        self.values.insert(var.to_string(), value);
     }
 
     pub fn assign(&mut self, token: &Token, value: Value) -> Result<Value, RuntimeError> {
         let var = &token.lexeme;
-        for values in self.scopes.iter_mut().rev() {
-            if values.contains_key(var) {
-                values.insert(var.clone(), value.clone());
-                return Ok(value);
-            }
+        if self.values.contains_key(var) {
+            self.values.insert(var.clone(), value.clone());
+            return Ok(value);
         }
-        err(&token, &format!("Undefined variable '{}'.", var))
+        match &self.enclosing {
+            Some(p) => p.borrow_mut().assign(token, value),
+            _ => err(&token, &format!("Undefined variable '{}'.", var)),
+        }
     }
 
     pub fn get(&self, token: &Token) -> Result<Value, RuntimeError> {
         let var = &token.lexeme;
-        for values in self.scopes.iter().rev() {
-            if let Some(value) = values.get(var) {
-                return Ok(value.clone());
-            }
+        match self.values.get(var) {
+            Some(value) => Ok(value.clone()),
+            None => match &self.enclosing {
+                Some(p) => p.borrow_mut().get(token),
+                _ => err(&token, &format!("Undefined variable '{}'.", var)),
+            },
         }
-        err(&token, &format!("Undefined variable '{}'.", var))
     }
 }

@@ -1,5 +1,6 @@
 use crate::ast::Expr::{self, *};
 use crate::ast::Stmt::{self, *};
+use crate::environment::EnvRef;
 use crate::environment::Environment;
 use crate::lox::Lox;
 use crate::token::{self, Literal::*, Token, TokenType as t};
@@ -12,35 +13,34 @@ use Value::*;
 
 type Result<T> = std::result::Result<T, RuntimeError>;
 
-pub fn interpret<W: Write>(lox: &mut Lox<W>, env: &mut Environment, statements: Vec<Stmt>) {
-    env.define_global("clock", F(Rc::new(Clock::new())));
+pub fn interpret<W: Write>(lox: &mut Lox<W>, env: EnvRef, statements: Vec<Stmt>) {
+    let global = Environment::global(env.clone());
+    global
+        .borrow_mut()
+        .define("clock", F(Rc::new(Clock::new())));
     for stmt in statements {
-        if let Err(e) = execute(lox, env, &stmt) {
+        if let Err(e) = execute(lox, env.clone(), &stmt) {
             lox.runtime_error(e);
             break;
         }
     }
 }
 
-fn execute_block<W: Write>(
-    lox: &mut Lox<W>,
-    env: &mut Environment,
-    statements: &[Stmt],
-) -> Result<()> {
-    statements.iter().try_for_each(|s| execute(lox, env, s))
+fn execute_block<W: Write>(lox: &mut Lox<W>, env: EnvRef, statements: &[Stmt]) -> Result<()> {
+    statements
+        .iter()
+        .try_for_each(|s| execute(lox, env.clone(), s))
 }
 
-fn execute<W: Write>(lox: &mut Lox<W>, env: &mut Environment, stmt: &Stmt) -> Result<()> {
+fn execute<W: Write>(lox: &mut Lox<W>, env: EnvRef, stmt: &Stmt) -> Result<()> {
     match stmt {
         Block(statements) => {
-            env.nest();
-            execute_block(lox, env, &statements)?;
-            env.unnest();
+            execute_block(lox, Environment::nested(env), &statements)?;
         }
         Expression(expression) => {
             evaluate(lox, env, &expression).map(|_| ())?;
         }
-        Function(name, params, body) => env.define(
+        Function(name, params, body) => env.borrow_mut().define(
             &name.lexeme,
             F(Rc::new(Function {
                 name: name.clone(),
@@ -49,7 +49,7 @@ fn execute<W: Write>(lox: &mut Lox<W>, env: &mut Environment, stmt: &Stmt) -> Re
             })),
         ),
         If(condition, then, r#else) => {
-            if is_truthy(&evaluate(lox, env, &condition)?) {
+            if is_truthy(&evaluate(lox, env.clone(), &condition)?) {
                 execute(lox, env, &then)?;
             } else if let Some(els) = r#else {
                 execute(lox, env, &els)?;
@@ -61,30 +61,30 @@ fn execute<W: Write>(lox: &mut Lox<W>, env: &mut Environment, stmt: &Stmt) -> Re
         }
         Var(name, initializer) => match initializer {
             Some(i) => {
-                let value = evaluate(lox, env, &i)?;
-                env.define(&name.lexeme, value)
+                let value = evaluate(lox, env.clone(), &i)?;
+                env.borrow_mut().define(&name.lexeme, value)
             }
-            _ => env.define(&name.lexeme, V(Nil)),
+            _ => env.borrow_mut().define(&name.lexeme, V(Nil)),
         },
         While(condition, body) => {
-            while is_truthy(&evaluate(lox, env, &condition)?) {
-                execute(lox, env, &body)?
+            while is_truthy(&evaluate(lox, env.clone(), &condition)?) {
+                execute(lox, env.clone(), &body)?
             }
         }
     }
     Ok(())
 }
 
-fn evaluate<W: Write>(lox: &mut Lox<W>, env: &mut Environment, expr: &Expr) -> Result<Value> {
+fn evaluate<W: Write>(lox: &mut Lox<W>, env: EnvRef, expr: &Expr) -> Result<Value> {
     match expr {
         Asign(name, value) => {
-            let value = evaluate(lox, env, value)?;
-            env.assign(name, value)
+            let value = evaluate(lox, env.clone(), value)?;
+            env.borrow_mut().assign(name, value)
         }
         Binary(left, op, right) => {
             match (
                 op.typ,
-                evaluate(lox, env, left)?,
+                evaluate(lox, env.clone(), left)?,
                 evaluate(lox, env, right)?,
             ) {
                 (t::BangEqual, V(a), V(b)) => Ok(V(Bool(a != b))),
@@ -103,7 +103,7 @@ fn evaluate<W: Write>(lox: &mut Lox<W>, env: &mut Environment, expr: &Expr) -> R
             }
         }
         Call(callee, paren, args) => {
-            if let F(callee) = evaluate(lox, env, callee)? {
+            if let F(callee) = evaluate(lox, env.clone(), callee)? {
                 if args.len() != callee.arity() {
                     let message = format!(
                         "Expected {} arguments but got {}.",
@@ -114,11 +114,11 @@ fn evaluate<W: Write>(lox: &mut Lox<W>, env: &mut Environment, expr: &Expr) -> R
                 } else {
                     let mut ars = vec![];
                     for arg in args {
-                        ars.push(evaluate(lox, env, arg)?);
+                        ars.push(evaluate(lox, env.clone(), arg)?);
                     }
                     callee.call(
                         &mut |env, body| execute_block(lox, env, body),
-                        &mut env.from_global(), // FIXME do not copy, change
+                        Environment::nested(Environment::global(env)),
                         paren,
                         &ars,
                     )
@@ -130,7 +130,7 @@ fn evaluate<W: Write>(lox: &mut Lox<W>, env: &mut Environment, expr: &Expr) -> R
         Grouping(expression) => evaluate(lox, env, &expression),
         Literal(value) => Ok(V(value.clone())),
         Logical(left, op, right) => {
-            let left = evaluate(lox, env, left)?;
+            let left = evaluate(lox, env.clone(), left)?;
             match (op.typ, is_truthy(&left)) {
                 (t::And, false) => Ok(left),
                 (t::Or, true) => Ok(left),
@@ -142,7 +142,7 @@ fn evaluate<W: Write>(lox: &mut Lox<W>, env: &mut Environment, expr: &Expr) -> R
             (t::Minus, V(Number(d))) => Ok(V(Number(-d))),
             _ => err(op, "Operand must be a number"),
         },
-        Variable(name) => env.get(name),
+        Variable(name) => env.borrow().get(name),
     }
 }
 
@@ -164,8 +164,8 @@ impl fmt::Display for Value {
 pub trait Callable: fmt::Display {
     fn call(
         &self,
-        execute_block: &mut dyn FnMut(&mut Environment, &[Stmt]) -> Result<()>,
-        env: &mut Environment,
+        execute_block: &mut dyn FnMut(EnvRef, &[Stmt]) -> Result<()>,
+        env: EnvRef,
         paren: &Token,
         args: &[Value],
     ) -> Result<Value>;
@@ -190,8 +190,8 @@ impl Callable for Clock {
 
     fn call(
         &self,
-        _: &mut dyn FnMut(&mut Environment, &[Stmt]) -> Result<()>,
-        _: &mut Environment,
+        _: &mut dyn FnMut(EnvRef, &[Stmt]) -> Result<()>,
+        _: EnvRef,
         _: &Token,
         _: &[Value],
     ) -> Result<Value> {
@@ -221,13 +221,13 @@ impl fmt::Display for Function {
 impl Callable for Function {
     fn call(
         &self,
-        execute_block: &mut dyn FnMut(&mut Environment, &[Stmt]) -> Result<()>,
-        env: &mut Environment,
+        execute_block: &mut dyn FnMut(EnvRef, &[Stmt]) -> Result<()>,
+        env: EnvRef,
         _: &Token,
         args: &[Value],
     ) -> Result<Value> {
         let defs = self.params.iter().zip(args.iter());
-        defs.for_each(|(param, arg)| env.define(&param.lexeme, arg.clone()));
+        defs.for_each(|(param, arg)| env.borrow_mut().define(&param.lexeme, arg.clone()));
 
         execute_block(env, &self.body)?;
 
@@ -278,7 +278,7 @@ mod spec {
         let tokens = scanner.scan_tokens(&mut lox);
         let mut parser = Parser::new(&mut lox, tokens);
         let statements = parser.parse();
-        interpret(&mut lox, &mut Environment::new(), statements);
+        interpret(&mut lox, Environment::new(), statements);
         lox.output()
     }
 
