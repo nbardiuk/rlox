@@ -1,5 +1,5 @@
 use crate::interpreter::err;
-use crate::interpreter::RuntimeError;
+use crate::interpreter::Result;
 use crate::interpreter::Value;
 use crate::token::Token;
 use std::cell::RefCell;
@@ -39,7 +39,7 @@ impl Environment {
         self.values.insert(var.to_string(), value);
     }
 
-    pub fn assign(&mut self, token: &Token, value: Value) -> Result<Value, RuntimeError> {
+    pub fn assign(&mut self, token: &Token, value: Value) -> Result<Value> {
         let var = &token.lexeme;
         if self.values.contains_key(var) {
             self.values.insert(var.clone(), value.clone());
@@ -51,7 +51,7 @@ impl Environment {
         }
     }
 
-    pub fn get(&self, token: &Token) -> Result<Value, RuntimeError> {
+    pub fn get(&self, token: &Token) -> Result<Value> {
         let var = &token.lexeme;
         match self.values.get(var) {
             Some(value) => Ok(value.clone()),

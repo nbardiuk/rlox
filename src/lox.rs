@@ -1,7 +1,7 @@
 use crate::environment::EnvRef;
 use crate::environment::Environment;
 use crate::interpreter::interpret;
-use crate::interpreter::RuntimeError;
+use crate::interpreter::RuntimeException;
 use crate::parser::Parser;
 use crate::scanner::Scanner;
 use crate::token::Token;
@@ -83,9 +83,13 @@ impl<W: Write> Lox<W> {
         self.out.write_fmt(format_args!("{}\n", message)).unwrap()
     }
 
-    pub fn runtime_error(&mut self, e: RuntimeError) {
+    pub fn runtime_error(&mut self, e: RuntimeException) {
         self.has_runtime_error = true;
-        self.println(&format!("[line {}] {}", e.token.line, e.message))
+        use RuntimeException::*;
+        match e {
+            Error(token, message) => self.println(&format!("[line {}] {}", token.line, message)),
+            Return(_) => {},
+        }
     }
 
     pub fn error(&mut self, line: usize, message: &str) {

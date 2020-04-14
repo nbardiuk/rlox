@@ -104,6 +104,8 @@ impl<'a, W: Write> Parser<'a, W> {
             self.if_statement()
         } else if self.matches(&[Print]) {
             self.print_statement()
+        } else if self.matches(&[Return]) {
+            self.return_statement()
         } else if self.matches(&[While]) {
             self.while_statement()
         } else if self.matches(&[LeftBrace]) {
@@ -202,6 +204,18 @@ impl<'a, W: Write> Parser<'a, W> {
         let value = self.expression()?;
         self.consume(Semicolon, "Expect ';' after value.")?;
         Ok(Stmt::Print(Rc::new(value)))
+    }
+
+    fn return_statement(&mut self) -> Result<Stmt, ParserError> {
+        use TokenType::*;
+        let keyword = self.previous();
+        let value = if !self.check(Semicolon) {
+            Some(Rc::new(self.expression()?))
+        } else {
+            None
+        };
+        self.consume(Semicolon, "Expect ';' after return value.")?;
+        Ok(Stmt::Return(keyword, value))
     }
 
     fn expression_statement(&mut self) -> Result<Stmt, ParserError> {
@@ -1020,5 +1034,19 @@ mod spec {
         b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,
         b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,
         b,b,b,b,b,b){}"), vec!["[line 7] Error at \'b\': Cannot have more than 255 parameters."]);
+    }
+
+    #[test]
+    fn return_statement() {
+        assert_eq!(parse("return;"), vec!["(return)"]);
+        assert_eq!(parse("return 1+1;"), vec!["(return (+ 1 1))"]);
+        assert_eq!(
+            parse("return"),
+            vec!["[line 1] Error at end: Expect expression."]
+        );
+        assert_eq!(
+            parse("return 1+1"),
+            vec!["[line 1] Error at end: Expect \';\' after return value."]
+        );
     }
 }

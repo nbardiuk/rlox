@@ -13,6 +13,7 @@ pub enum Stmt {
     Function(Token, Vec<Token>, Vec<Stmt>),
     If(Rc<Expr>, Rc<Stmt>, Option<Rc<Stmt>>),
     Print(Rc<Expr>),
+    Return(Token, Option<Rc<Expr>>),
     Var(Token, Option<Rc<Expr>>),
     While(Rc<Expr>, Rc<Stmt>),
 }
@@ -50,6 +51,8 @@ impl Display for Stmt {
             If(cond, then, None) => write!(f, "(if {} {})", cond, then),
             If(cond, then, Some(r#else)) => write!(f, "(if {} {} {})", cond, then, r#else),
             Print(expr) => write!(f, "(print {})", expr),
+            Return(_, None) => write!(f, "(return)"),
+            Return(_, Some(expr)) => write!(f, "(return {})", expr),
             Var(name, None) => write!(f, "(def {})", name),
             Var(name, Some(init)) => write!(f, "(def {} {})", name, init),
             While(cond, body) => write!(f, "(while {} {})", cond, body),

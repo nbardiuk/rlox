@@ -11,7 +11,7 @@ use std::result::Result::{Err, Ok};
 use std::time::Instant;
 use Value::*;
 
-type Result<T> = std::result::Result<T, RuntimeError>;
+pub type Result<T> = std::result::Result<T, RuntimeException>;
 
 pub fn interpret<W: Write>(lox: &mut Lox<W>, env: EnvRef, statements: Vec<Stmt>) {
     let global = Environment::global(env.clone());
@@ -58,6 +58,13 @@ fn execute<W: Write>(lox: &mut Lox<W>, env: EnvRef, stmt: &Stmt) -> Result<()> {
         Print(expression) => {
             let val = evaluate(lox, env, &expression)?;
             lox.println(&val.to_string());
+        }
+        Return(_keyword, value) => {
+            let value = match value {
+                Some(value) => evaluate(lox, env, value)?,
+                None => V(Nil),
+            };
+            return Err(RuntimeException::Return(value));
         }
         Var(name, initializer) => match initializer {
             Some(i) => {
@@ -229,9 +236,11 @@ impl Callable for Function {
         let defs = self.params.iter().zip(args.iter());
         defs.for_each(|(param, arg)| env.borrow_mut().define(&param.lexeme, arg.clone()));
 
-        execute_block(env, &self.body)?;
-
-        Ok(V(Nil))
+        match execute_block(env, &self.body) {
+            Err(RuntimeException::Return(v)) => Ok(v),
+            Ok(_) => Ok(V(Nil)),
+            Err(e) => Err(e),
+        }
     }
 
     fn arity(&self) -> usize {
@@ -239,23 +248,19 @@ impl Callable for Function {
     }
 }
 
-#[derive(Debug, PartialEq)]
-pub struct RuntimeError {
-    pub token: Token,
-    pub message: std::string::String,
+pub enum RuntimeException {
+    Error(Token, std::string::String),
+    Return(Value),
 }
 
-impl RuntimeError {
-    pub fn new(token: &Token, message: &str) -> RuntimeError {
-        RuntimeError {
-            token: token.clone(),
-            message: message.to_string(),
-        }
+impl RuntimeException {
+    pub fn new(token: &Token, message: &str) -> RuntimeException {
+        RuntimeException::Error(token.clone(), message.to_string())
     }
 }
 
 pub fn err<T>(token: &Token, message: &str) -> Result<T> {
-    Err(RuntimeError::new(token, message))
+    Err(RuntimeException::new(token, message))
 }
 
 fn is_truthy(v: &Value) -> bool {
@@ -724,11 +729,8 @@ mod spec {
 
     #[test]
     fn function() {
-        assert_eq!(
-            run("fun add() {}
-                 print add;"),
-            "f#add\n"
-        );
+        assert_eq!(run("fun add(){} print add;"), "f#add\n");
+        assert_eq!(run("fun add(){} print add();"), "nil\n");
         assert_eq!(
             run("fun add(a, b, c) {
                    print a + b + c;
@@ -773,5 +775,20 @@ mod spec {
              2\n\
              3\n"
         );
+    }
+
+    #[test]
+    fn returns() {
+        assert_eq!(
+            run("fun fibonacci(n) {
+                   if (n <= 1) return n;
+                   return fibonacci(n - 2) + fibonacci(n - 1);
+                 }
+                 for (var i = 0; i < 20; i = i + 1) {
+                   print fibonacci(i);
+                 }"),
+            "0\n1\n1\n2\n3\n5\n8\n13\n21\n34\n55\n89\n144\n233\n377\n610\n987\n1597\n2584\n4181\n"
+        );
+        assert_eq!(run("return 123; print 2;"), "");
     }
 }
