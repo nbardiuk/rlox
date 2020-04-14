@@ -46,6 +46,7 @@ fn execute<W: Write>(lox: &mut Lox<W>, env: EnvRef, stmt: &Stmt) -> Result<()> {
                 name: name.clone(),
                 params: params.clone(),
                 body: body.to_vec(),
+                closure: env.clone(),
             })),
         ),
         If(condition, then, r#else) => {
@@ -123,12 +124,7 @@ fn evaluate<W: Write>(lox: &mut Lox<W>, env: EnvRef, expr: &Expr) -> Result<Valu
                     for arg in args {
                         ars.push(evaluate(lox, env.clone(), arg)?);
                     }
-                    callee.call(
-                        &mut |env, body| execute_block(lox, env, body),
-                        Environment::nested(Environment::global(env)),
-                        paren,
-                        &ars,
-                    )
+                    callee.call(&mut |env, body| execute_block(lox, env, body), paren, &ars)
                 }
             } else {
                 err(paren, "Can only call functions and classes.")
@@ -172,7 +168,6 @@ pub trait Callable: fmt::Display {
     fn call(
         &self,
         execute_block: &mut dyn FnMut(EnvRef, &[Stmt]) -> Result<()>,
-        env: EnvRef,
         paren: &Token,
         args: &[Value],
     ) -> Result<Value>;
@@ -198,7 +193,6 @@ impl Callable for Clock {
     fn call(
         &self,
         _: &mut dyn FnMut(EnvRef, &[Stmt]) -> Result<()>,
-        _: EnvRef,
         _: &Token,
         _: &[Value],
     ) -> Result<Value> {
@@ -217,6 +211,7 @@ struct Function {
     name: Token,
     params: Vec<Token>,
     body: Vec<Stmt>,
+    closure: EnvRef,
 }
 
 impl fmt::Display for Function {
@@ -229,10 +224,11 @@ impl Callable for Function {
     fn call(
         &self,
         execute_block: &mut dyn FnMut(EnvRef, &[Stmt]) -> Result<()>,
-        env: EnvRef,
         _: &Token,
         args: &[Value],
     ) -> Result<Value> {
+        let env = Environment::nested(self.closure.clone());
+
         let defs = self.params.iter().zip(args.iter());
         defs.for_each(|(param, arg)| env.borrow_mut().define(&param.lexeme, arg.clone()));
 
@@ -790,5 +786,23 @@ mod spec {
             "0\n1\n1\n2\n3\n5\n8\n13\n21\n34\n55\n89\n144\n233\n377\n610\n987\n1597\n2584\n4181\n"
         );
         assert_eq!(run("return 123; print 2;"), "");
+    }
+
+    #[test]
+    fn local_functions() {
+        assert_eq!(
+            run("fun makeCounter() {
+                   var i = 0;
+                   fun count() {
+                     i = i + 1;
+                     print i;
+                   }
+                   return count;
+                 }
+                 var counter = makeCounter();
+                 counter();
+                 counter();"),
+            "1\n2\n"
+        );
     }
 }
