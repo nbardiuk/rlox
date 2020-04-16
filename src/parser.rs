@@ -403,7 +403,7 @@ impl<'a, W: Write> Parser<'a, W> {
     }
 
     fn error<T>(&mut self, token: Token, message: &str) -> Result<T, ParserError> {
-        self.lox.error_token(token, message);
+        self.lox.error_token(&token, message);
         Err(ParserError {})
     }
 

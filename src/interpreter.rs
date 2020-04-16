@@ -4,6 +4,7 @@ use crate::environment::EnvRef;
 use crate::environment::Environment;
 use crate::lox::Lox;
 use crate::token::{self, Literal::*, Token, TokenType as t};
+use std::collections::HashMap;
 use std::fmt;
 use std::io::Write;
 use std::rc::Rc;
@@ -13,32 +14,47 @@ use Value::*;
 
 pub type Result<T> = std::result::Result<T, RuntimeException>;
 
-pub fn interpret<W: Write>(lox: &mut Lox<W>, env: EnvRef, statements: Vec<Stmt>) {
+pub fn interpret<W: Write>(
+    lox: &mut Lox<W>,
+    env: EnvRef,
+    locals: &HashMap<Expr, usize>,
+    statements: Vec<Stmt>,
+) {
     let global = Environment::global(env.clone());
     global
         .borrow_mut()
         .define("clock", F(Rc::new(Clock::new())));
     for stmt in statements {
-        if let Err(e) = execute(lox, env.clone(), &stmt) {
+        if let Err(e) = execute(lox, env.clone(), locals, &stmt) {
             lox.runtime_error(e);
             break;
         }
     }
 }
 
-fn execute_block<W: Write>(lox: &mut Lox<W>, env: EnvRef, statements: &[Stmt]) -> Result<()> {
+fn execute_block<W: Write>(
+    lox: &mut Lox<W>,
+    env: EnvRef,
+    locals: &HashMap<Expr, usize>,
+    statements: &[Stmt],
+) -> Result<()> {
     statements
         .iter()
-        .try_for_each(|s| execute(lox, env.clone(), s))
+        .try_for_each(|s| execute(lox, env.clone(), locals, s))
 }
 
-fn execute<W: Write>(lox: &mut Lox<W>, env: EnvRef, stmt: &Stmt) -> Result<()> {
+fn execute<W: Write>(
+    lox: &mut Lox<W>,
+    env: EnvRef,
+    locals: &HashMap<Expr, usize>,
+    stmt: &Stmt,
+) -> Result<()> {
     match stmt {
         Block(statements) => {
-            execute_block(lox, Environment::nested(env), &statements)?;
+            execute_block(lox, Environment::nested(env), locals, &statements)?;
         }
         Expression(expression) => {
-            evaluate(lox, env, &expression).map(|_| ())?;
+            evaluate(lox, env, locals, &expression).map(|_| ())?;
         }
         Function(name, params, body) => env.borrow_mut().define(
             &name.lexeme,
@@ -50,50 +66,59 @@ fn execute<W: Write>(lox: &mut Lox<W>, env: EnvRef, stmt: &Stmt) -> Result<()> {
             })),
         ),
         If(condition, then, r#else) => {
-            if is_truthy(&evaluate(lox, env.clone(), &condition)?) {
-                execute(lox, env, &then)?;
+            if is_truthy(&evaluate(lox, env.clone(), locals, &condition)?) {
+                execute(lox, env, locals, &then)?;
             } else if let Some(els) = r#else {
-                execute(lox, env, &els)?;
+                execute(lox, env, locals, &els)?;
             }
         }
         Print(expression) => {
-            let val = evaluate(lox, env, &expression)?;
+            let val = evaluate(lox, env, locals, &expression)?;
             lox.println(&val.to_string());
         }
         Return(_keyword, value) => {
             let value = match value {
-                Some(value) => evaluate(lox, env, value)?,
+                Some(value) => evaluate(lox, env, locals, value)?,
                 None => V(Nil),
             };
             return Err(RuntimeException::Return(value));
         }
         Var(name, initializer) => match initializer {
             Some(i) => {
-                let value = evaluate(lox, env.clone(), &i)?;
+                let value = evaluate(lox, env.clone(), locals, &i)?;
                 env.borrow_mut().define(&name.lexeme, value)
             }
             _ => env.borrow_mut().define(&name.lexeme, V(Nil)),
         },
         While(condition, body) => {
-            while is_truthy(&evaluate(lox, env.clone(), &condition)?) {
-                execute(lox, env.clone(), &body)?
+            while is_truthy(&evaluate(lox, env.clone(), locals, &condition)?) {
+                execute(lox, env.clone(), locals, &body)?
             }
         }
     }
     Ok(())
 }
 
-fn evaluate<W: Write>(lox: &mut Lox<W>, env: EnvRef, expr: &Expr) -> Result<Value> {
+fn evaluate<W: Write>(
+    lox: &mut Lox<W>,
+    env: EnvRef,
+    locals: &HashMap<Expr, usize>,
+    expr: &Expr,
+) -> Result<Value> {
     match expr {
         Asign(name, value) => {
-            let value = evaluate(lox, env.clone(), value)?;
-            env.borrow_mut().assign(name, value)
+            let value = evaluate(lox, env.clone(), locals, value)?;
+            if let Some(distance) = locals.get(expr) {
+                Environment::assign_at(env, *distance, name, value)
+            } else {
+                Environment::global(env).borrow_mut().assign(name, value)
+            }
         }
         Binary(left, op, right) => {
             match (
                 op.typ,
-                evaluate(lox, env.clone(), left)?,
-                evaluate(lox, env, right)?,
+                evaluate(lox, env.clone(), locals, left)?,
+                evaluate(lox, env, locals, right)?,
             ) {
                 (t::BangEqual, V(a), V(b)) => Ok(V(Bool(a != b))),
                 (t::EqualEqual, V(a), V(b)) => Ok(V(Bool(a == b))),
@@ -111,7 +136,7 @@ fn evaluate<W: Write>(lox: &mut Lox<W>, env: EnvRef, expr: &Expr) -> Result<Valu
             }
         }
         Call(callee, paren, args) => {
-            if let F(callee) = evaluate(lox, env.clone(), callee)? {
+            if let F(callee) = evaluate(lox, env.clone(), locals, callee)? {
                 if args.len() != callee.arity() {
                     let message = format!(
                         "Expected {} arguments but got {}.",
@@ -122,30 +147,47 @@ fn evaluate<W: Write>(lox: &mut Lox<W>, env: EnvRef, expr: &Expr) -> Result<Valu
                 } else {
                     let mut ars = vec![];
                     for arg in args {
-                        ars.push(evaluate(lox, env.clone(), arg)?);
+                        ars.push(evaluate(lox, env.clone(), locals, arg)?);
                     }
-                    callee.call(&mut |env, body| execute_block(lox, env, body), paren, &ars)
+                    callee.call(
+                        &mut |env, body| execute_block(lox, env, locals, body),
+                        paren,
+                        &ars,
+                    )
                 }
             } else {
                 err(paren, "Can only call functions and classes.")
             }
         }
-        Grouping(expression) => evaluate(lox, env, &expression),
+        Grouping(expression) => evaluate(lox, env, locals, &expression),
         Literal(value) => Ok(V(value.clone())),
         Logical(left, op, right) => {
-            let left = evaluate(lox, env.clone(), left)?;
+            let left = evaluate(lox, env.clone(), locals, left)?;
             match (op.typ, is_truthy(&left)) {
                 (t::And, false) => Ok(left),
                 (t::Or, true) => Ok(left),
-                _ => evaluate(lox, env, right),
+                _ => evaluate(lox, env, locals, right),
             }
         }
-        Unary(op, right) => match (op.typ, evaluate(lox, env, right)?) {
+        Unary(op, right) => match (op.typ, evaluate(lox, env, locals, right)?) {
             (t::Bang, r) => Ok(V(Bool(!is_truthy(&r)))),
             (t::Minus, V(Number(d))) => Ok(V(Number(-d))),
             _ => err(op, "Operand must be a number"),
         },
-        Variable(name) => env.borrow().get(name),
+        Variable(name) => lookup_variable(env, locals, name, expr),
+    }
+}
+
+fn lookup_variable(
+    env: EnvRef,
+    locals: &HashMap<Expr, usize>,
+    name: &Token,
+    expr: &Expr,
+) -> Result<Value> {
+    if let Some(distance) = locals.get(expr) {
+        Environment::get_at(env, *distance, name)
+    } else {
+        Environment::global(env).borrow().get(name)
     }
 }
 
@@ -271,6 +313,7 @@ fn is_truthy(v: &Value) -> bool {
 mod spec {
     use super::*;
     use crate::parser::Parser;
+    use crate::resolver::Resolver;
     use crate::scanner::Scanner;
 
     fn run<'a>(source: &'a str) -> std::string::String {
@@ -279,7 +322,9 @@ mod spec {
         let tokens = scanner.scan_tokens(&mut lox);
         let mut parser = Parser::new(&mut lox, tokens);
         let statements = parser.parse();
-        interpret(&mut lox, Environment::new(), statements);
+        let mut resolver = Resolver::new();
+        resolver.resolve_stmts(&mut lox, &statements);
+        interpret(&mut lox, Environment::new(), &resolver.locals, statements);
         lox.output()
     }
 
@@ -574,7 +619,8 @@ mod spec {
                    var a = a + 2;
                    print a;
                  }"),
-            "3\n"
+            "[line 3] Error at \'a\': Cannot read local variable in its own initializer.\n\
+             [line 3] Undefined variable \'a\'.\n"
         );
         assert_eq!(
             run("{
@@ -785,7 +831,10 @@ mod spec {
                  }"),
             "0\n1\n1\n2\n3\n5\n8\n13\n21\n34\n55\n89\n144\n233\n377\n610\n987\n1597\n2584\n4181\n"
         );
-        assert_eq!(run("return 123; print 2;"), "");
+        assert_eq!(
+            run("return 123; print 2;"),
+            "[line 1] Error at \'return\': Cannot return from top-level code\n"
+        );
     }
 
     #[test]
@@ -803,6 +852,18 @@ mod spec {
                  counter();
                  counter();"),
             "1\n2\n"
+        );
+        assert_eq!(
+            run("var a = \"global\";
+                 {
+                   fun showA() {
+                     print a;
+                   }
+                   showA();
+                   var a = \"block\";
+                   showA();
+                 }"),
+            "\"global\"\n\"global\"\n"
         );
     }
 }

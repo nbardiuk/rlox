@@ -1,8 +1,5 @@
-use crate::token::Literal;
-use crate::token::Token;
-use std::fmt::Display;
-use std::fmt::Error;
-use std::fmt::Formatter;
+use crate::token::{Literal, Token};
+use std::fmt::{Display, Error, Formatter};
 use std::rc::Rc;
 use std::result::Result;
 
@@ -18,6 +15,7 @@ pub enum Stmt {
     While(Rc<Expr>, Rc<Stmt>),
 }
 
+#[derive(Clone, Hash, Eq, PartialEq)]
 pub enum Expr {
     Asign(Token, Rc<Expr>),
     Binary(Rc<Expr>, Token, Rc<Expr>),

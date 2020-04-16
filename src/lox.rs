@@ -3,6 +3,7 @@ use crate::environment::Environment;
 use crate::interpreter::interpret;
 use crate::interpreter::RuntimeException;
 use crate::parser::Parser;
+use crate::resolver::Resolver;
 use crate::scanner::Scanner;
 use crate::token::Token;
 use crate::token::TokenType;
@@ -44,9 +45,20 @@ impl<W: Write> Lox<W> {
     fn run(&mut self, env: EnvRef, source: &str) {
         let mut scanner = Scanner::new(source);
         let tokens = scanner.scan_tokens(self);
+        if self.has_error {
+            return;
+        }
+
         let mut parser = Parser::new(self, tokens);
         let statements = parser.parse();
-        interpret(self, env, statements);
+        if self.has_error {
+            return;
+        }
+
+        let mut resolver = Resolver::new();
+        resolver.resolve_stmts(self, &statements);
+
+        interpret(self, env, &resolver.locals, statements);
     }
 
     pub fn run_file(&mut self, path: &str) -> io::Result<()> {
@@ -88,7 +100,7 @@ impl<W: Write> Lox<W> {
         use RuntimeException::*;
         match e {
             Error(token, message) => self.println(&format!("[line {}] {}", token.line, message)),
-            Return(_) => {},
+            Return(_) => {}
         }
     }
 
@@ -96,7 +108,7 @@ impl<W: Write> Lox<W> {
         self.report(line, "", message)
     }
 
-    pub fn error_token(&mut self, token: Token, message: &str) {
+    pub fn error_token(&mut self, token: &Token, message: &str) {
         match token.typ {
             TokenType::EOF => self.report(token.line, " at end", message),
             _ => self.report(token.line, &format!(" at '{}'", token.lexeme), message),

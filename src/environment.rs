@@ -51,6 +51,36 @@ impl Environment {
         }
     }
 
+    fn ancestor(env: EnvRef, distance: usize) -> EnvRef {
+        if distance == 0 {
+            env
+        } else {
+            let p = env
+                .borrow()
+                .enclosing
+                .clone()
+                .expect(&format!("Reached globals at distance {}", distance));
+            Self::ancestor(p, distance - 1)
+        }
+    }
+
+    pub fn get_at(env: EnvRef, distance: usize, token: &Token) -> Result<Value> {
+        let var = &token.lexeme;
+        match Self::ancestor(env, distance).borrow().values.get(var) {
+            Some(value) => Ok(value.clone()),
+            None => err(&token, &format!("Undefined variable '{}'.", var)),
+        }
+    }
+
+    pub fn assign_at(env: EnvRef, distance: usize, token: &Token, value: Value) -> Result<Value> {
+        let var = &token.lexeme;
+        Self::ancestor(env, distance)
+            .borrow_mut()
+            .values
+            .insert(var.clone(), value.clone());
+        Ok(value)
+    }
+
     pub fn get(&self, token: &Token) -> Result<Value> {
         let var = &token.lexeme;
         match self.values.get(var) {
