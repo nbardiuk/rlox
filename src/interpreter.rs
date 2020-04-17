@@ -53,6 +53,10 @@ fn execute<W: Write>(
         Block(statements) => {
             execute_block(lox, Environment::nested(env), locals, &statements)?;
         }
+        Class(name, methods) => {
+            env.borrow_mut().define(&name.lexeme, V(Nil));
+            env.borrow_mut().assign(name, C(name.lexeme.clone()));
+        }
         Expression(expression) => {
             evaluate(lox, env, locals, &expression).map(|_| ())?;
         }
@@ -195,6 +199,7 @@ fn lookup_variable(
 pub enum Value {
     V(token::Literal),
     F(Rc<dyn Callable>),
+    C(std::string::String),
 }
 
 impl fmt::Display for Value {
@@ -202,6 +207,7 @@ impl fmt::Display for Value {
         match self {
             V(l) => write!(f, "{}", l),
             F(c) => write!(f, "{}", c),
+            C(n) => write!(f, "{}", n),
         }
     }
 }
@@ -864,6 +870,19 @@ mod spec {
                    showA();
                  }"),
             "\"global\"\n\"global\"\n"
+        );
+    }
+
+    #[test]
+    fn class() {
+        assert_eq!(
+            run("class DevonshireCream {
+                   serveOn() {
+                     return \"Scones\";
+                   }
+                 }
+                 print DevonshireCream;"),
+            "DevonshireCream\n"
         );
     }
 }

@@ -39,6 +39,10 @@ impl Resolver {
                 self.resolve_stmts(lox, statements);
                 self.end_scope();
             }
+            Class(name, _methods) => {
+                self.declare(lox, name);
+                self.define(name);
+            }
             Expression(expression) => {
                 self.resolve_expr(lox, expression);
             }

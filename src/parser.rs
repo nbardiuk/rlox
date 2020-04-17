@@ -38,7 +38,9 @@ impl<'a, W: Write> Parser<'a, W> {
 
     fn declaration(&mut self) -> Option<Stmt> {
         use TokenType::*;
-        let statement = if self.matches(&[Fun]) {
+        let statement = if self.matches(&[Class]) {
+            self.class_declaration()
+        } else if self.matches(&[Fun]) {
             self.function("function")
         } else if self.matches(&[Var]) {
             self.var_declaration()
@@ -79,6 +81,21 @@ impl<'a, W: Write> Parser<'a, W> {
         let body = self.block()?;
 
         Ok(Stmt::Function(name, parameters, body))
+    }
+
+    fn class_declaration(&mut self) -> Result<Stmt, ParserError> {
+        use TokenType::*;
+        let name = self.consume(Identifier, "Expect class name.")?;
+
+        self.consume(LeftBrace, "Expect '{' before class body.")?;
+
+        let mut methods = vec![];
+        while !self.check(RightBrace) && !self.is_at_end() {
+            methods.push(self.function("method")?);
+        }
+        self.consume(RightBrace, "Expect '}' after class body.")?;
+
+        Ok(Stmt::Class(name, methods))
     }
 
     fn var_declaration(&mut self) -> Result<Stmt, ParserError> {
@@ -1047,6 +1064,53 @@ mod spec {
         assert_eq!(
             parse("return 1+1"),
             vec!["[line 1] Error at end: Expect \';\' after return value."]
+        );
+    }
+
+    #[test]
+    fn class() {
+        assert_eq!(parse("class a {}"), vec!["(class a )"]);
+        assert_eq!(
+            parse("class a {f(){}g(){}}"),
+            vec!["(class a (defn f () ) (defn g () ))"]
+        );
+        assert_eq!(
+            parse(
+                "class Breakfast {
+                   cook() {
+                     print \"Eggs a-fryin'!\";
+                   }
+                   serve(who) {
+                     print \"Enjoy your breakfast, \" + who + \".\";
+                   }
+                 }"
+            ),
+            vec![
+                "(class Breakfast \
+                   (defn cook () \
+                     (print \"Eggs a-fryin'!\")) \
+                   (defn serve (who) \
+                     (print (+ (+ \"Enjoy your breakfast, \" who) \".\"))))"
+            ]
+        );
+        assert_eq!(
+            parse("class a {var b = 1;}"),
+            vec![
+                "[line 1] Error at \'var\': Expect method name.",
+                "[line 1] Error at \'}\': Expect expression."
+            ]
+        );
+        assert_eq!(
+            parse("class {}"),
+            vec!["[line 1] Error at \'{\': Expect class name."]
+        );
+        assert_eq!(
+            parse("class class {}"),
+            vec!["[line 1] Error at \'class\': Expect class name."]
+        );
+        assert_eq!(
+            parse("class a"),
+            vec!["[line 1] Error at end: Expect \'{\' before class body."]
         );
     }
 }
