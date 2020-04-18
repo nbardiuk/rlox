@@ -1,6 +1,6 @@
 use crate::environment::EnvRef;
 use crate::environment::Environment;
-use crate::interpreter::interpret;
+use crate::interpreter::Interpreter;
 use crate::interpreter::RuntimeException;
 use crate::parser::Parser;
 use crate::resolver::Resolver;
@@ -58,7 +58,7 @@ impl<W: Write> Lox<W> {
         let mut resolver = Resolver::new();
         resolver.resolve_stmts(self, &statements);
 
-        interpret(self, env, &resolver.locals, statements);
+        Interpreter::new(self).interpret(env, &resolver.locals, statements);
     }
 
     pub fn run_file(&mut self, path: &str) -> io::Result<()> {
