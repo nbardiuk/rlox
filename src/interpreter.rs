@@ -49,10 +49,30 @@ impl<'a, W: Write> Interpreter<'a, W> {
             Block(statements) => {
                 self.execute_block(Environment::nested(env), &statements)?;
             }
-            Class(name, _methods) => {
+            Class(name, methods) => {
                 env.borrow_mut().define(&name.lexeme, V(Nil));
-                env.borrow_mut()
-                    .assign(name, F(Rc::new(Class { name: name.clone() })))?;
+                let mut ms = HashMap::default();
+                for method in methods {
+                    if let Function(name, params, body) = method {
+                        ms.insert(
+                            name.lexeme.clone(),
+                            F(Rc::new(Function {
+                                name: name.clone(),
+                                params: params.clone(),
+                                body: body.to_vec(),
+                                closure: env.clone(),
+                            })),
+                        );
+                    }
+                }
+
+                env.borrow_mut().assign(
+                    name,
+                    F(Rc::new(Class {
+                        name: name.clone(),
+                        methods: ms,
+                    })),
+                )?;
             }
             Expression(expression) => {
                 self.evaluate(env, &expression).map(|_| ())?;
@@ -295,14 +315,18 @@ impl Callable for Function {
 #[derive(Clone)]
 struct Class {
     name: Token,
+    methods: HashMap<std::string::String, Value>,
 }
-
+impl Class {
+    fn find_method(&self, name: &str) -> Option<Value> {
+        self.methods.get(name).cloned()
+    }
+}
 impl fmt::Display for Class {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.name,)
     }
 }
-
 impl Callable for Class {
     fn call(
         &self,
@@ -343,6 +367,8 @@ impl Instance {
     fn get(&self, name: &Token) -> Result<Value> {
         if let Some(v) = self.fields.borrow().get(&name.lexeme) {
             Ok(v.clone())
+        } else if let Some(v) = self.class.find_method(&name.lexeme) {
+            Ok(v)
         } else {
             err(name, &format!("Undefined property '{}'.", name))
         }
@@ -979,6 +1005,30 @@ mod spec {
         assert_eq!(
             run("print 1.a;"),
             "[line 1] Only instances have properties.\n"
+        );
+    }
+
+    #[test]
+    fn method() {
+        assert_eq!(
+            run("class Bacon {
+                   eat() {
+                     print \"Crunch crunch crunch!\";
+                   }
+                 }
+
+                 Bacon().eat();"),
+            "\"Crunch crunch crunch!\"\n"
+        );
+        assert_eq!(
+            run("fun notMethod(argument) {
+                   print \"called function with \" + argument;
+                 }
+                 class Box {}
+                 var box = Box();
+                 box.function = notMethod;
+                 box.function(\"argument\");"),
+            "\"called function with argument\"\n"
         );
     }
 }

@@ -16,6 +16,7 @@ pub struct Resolver<'a, W: Write> {
 enum FunctionType {
     None,
     Function,
+    Method,
 }
 
 impl<'a, W: Write> Resolver<'a, W> {
@@ -48,9 +49,14 @@ impl<'a, W: Write> Resolver<'a, W> {
                 self.resolve_stmts(statements);
                 self.end_scope();
             }
-            Class(name, _methods) => {
+            Class(name, methods) => {
                 self.declare(name);
                 self.define(name);
+                for method in methods {
+                    if let Function(_name, params, body) = method {
+                        self.resolve_function(params, body, FunctionType::Method)
+                    }
+                }
             }
             Expression(expression) => {
                 self.resolve_expr(expression);
