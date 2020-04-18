@@ -61,6 +61,7 @@ impl<'a, W: Write> Interpreter<'a, W> {
                                 params: params.clone(),
                                 body: body.to_vec(),
                                 closure: env.clone(),
+                                is_initializer: name.lexeme == "init",
                             },
                         );
                     }
@@ -84,6 +85,7 @@ impl<'a, W: Write> Interpreter<'a, W> {
                     params: params.clone(),
                     body: body.to_vec(),
                     closure: env.clone(),
+                    is_initializer: false,
                 })),
             ),
             If(condition, then, r#else) => {
@@ -282,6 +284,7 @@ struct Function {
     params: Vec<Token>,
     body: Vec<Stmt>,
     closure: EnvRef,
+    is_initializer: bool,
 }
 impl Function {
     fn bind(&self, instance: Instance) -> Self {
@@ -292,6 +295,7 @@ impl Function {
             params: self.params.clone(),
             body: self.body.clone(),
             closure,
+            is_initializer: self.is_initializer,
         }
     }
 }
@@ -304,7 +308,7 @@ impl Callable for Function {
     fn call(
         &self,
         execute_block: &mut dyn FnMut(EnvRef, &[Stmt]) -> Result<()>,
-        _: &Token,
+        paren: &Token,
         args: &[Value],
     ) -> Result<Value> {
         let env = Environment::nested(self.closure.clone());
@@ -314,7 +318,15 @@ impl Callable for Function {
 
         match execute_block(env, &self.body) {
             Err(RuntimeException::Return(v)) => Ok(v),
-            Ok(_) => Ok(V(Nil)),
+            Ok(_) => {
+                if self.is_initializer {
+                    let mut this = paren.clone();
+                    this.lexeme = "this".to_string();
+                    Environment::get_at(self.closure.clone(), 0, &this)
+                } else {
+                    Ok(V(Nil))
+                }
+            }
             Err(e) => Err(e),
         }
     }
@@ -1108,7 +1120,7 @@ mod spec {
             run("class A {init(){print this;} }
                  var a = A();
                  print a.init();"),
-            "A instance\nA instance\nnil\n"
+            "A instance\nA instance\nA instance\n"
         );
         assert_eq!(
             run("class A {init(b){this.b = b;} }
