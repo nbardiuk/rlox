@@ -385,9 +385,8 @@ mod spec {
         let tokens = scanner.scan_tokens(&mut lox);
         let mut parser = Parser::new(&mut lox, tokens);
         let statements = parser.parse();
-        let mut resolver = Resolver::new();
-        resolver.resolve_stmts(&mut lox, &statements);
-        Interpreter::new(&mut lox, &resolver.locals).interpret(Environment::new(), statements);
+        let locals = Resolver::new(&mut lox).resolve(&statements).locals;
+        Interpreter::new(&mut lox, &locals).interpret(Environment::new(), statements);
         lox.output()
     }
 
