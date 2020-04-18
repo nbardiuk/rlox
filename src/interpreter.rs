@@ -423,7 +423,13 @@ mod spec {
         let tokens = scanner.scan_tokens(&mut lox);
         let mut parser = Parser::new(&mut lox, tokens);
         let statements = parser.parse();
+        if lox.has_error {
+            return lox.output();
+        }
         let locals = Resolver::new(&mut lox).resolve(&statements).locals;
+        if lox.has_error {
+            return lox.output();
+        }
         Interpreter::new(&mut lox, &locals).interpret(Environment::new(), statements);
         lox.output()
     }
@@ -719,8 +725,7 @@ mod spec {
                    var a = a + 2;
                    print a;
                  }"),
-            "[line 3] Error at \'a\': Cannot read local variable in its own initializer.\n\
-             [line 3] Undefined variable \'a\'.\n"
+            "[line 3] Error at \'a\': Cannot read local variable in its own initializer.\n"
         );
         assert_eq!(
             run("{
@@ -1073,14 +1078,12 @@ mod spec {
         );
         assert_eq!(
             run("print this;"),
-            "[line 1] Error at \'this\': Cannot use \'this\' outside of a class\n\
-             [line 1] Undefined variable \'this\'.\n"
+            "[line 1] Error at \'this\': Cannot use \'this\' outside of a class\n"
         );
         assert_eq!(
             run("fun notAMethod(){ print this; }
                 notAMethod();"),
-            "[line 1] Error at \'this\': Cannot use \'this\' outside of a class\n\
-             [line 1] Undefined variable \'this\'.\n"
+            "[line 1] Error at \'this\': Cannot use \'this\' outside of a class\n"
         );
     }
 }
