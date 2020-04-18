@@ -17,6 +17,7 @@ pub struct Resolver<'a, W: Write> {
 enum FunctionType {
     None,
     Function,
+    Initializer,
     Method,
 }
 
@@ -70,8 +71,13 @@ impl<'a, W: Write> Resolver<'a, W> {
                     {
                         self.define_s("this");
                         for method in methods {
-                            if let Function(_name, params, body) = method {
-                                self.resolve_function(params, body, FunctionType::Method)
+                            if let Function(name, params, body) = method {
+                                let declaration = if name.lexeme == "init" {
+                                    FunctionType::Initializer
+                                } else {
+                                    FunctionType::Method
+                                };
+                                self.resolve_function(params, body, declaration)
                             }
                         }
                     }
@@ -110,6 +116,10 @@ impl<'a, W: Write> Resolver<'a, W> {
                         .error_token(keyword, "Cannot return from top-level code");
                 }
                 if let Some(value) = value {
+                    if self.function == FunctionType::Initializer {
+                        self.lox
+                            .error_token(keyword, "Cannot return a value from an initializer");
+                    }
                     self.resolve_expr(value);
                 }
             }

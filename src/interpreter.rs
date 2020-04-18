@@ -298,6 +298,12 @@ impl Function {
             is_initializer: self.is_initializer,
         }
     }
+
+    fn this(&self) -> Result<Value> {
+        let mut this = self.name.clone();
+        this.lexeme = "this".to_string();
+        Environment::get_at(self.closure.clone(), 0, &this)
+    }
 }
 impl fmt::Display for Function {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -308,7 +314,7 @@ impl Callable for Function {
     fn call(
         &self,
         execute_block: &mut dyn FnMut(EnvRef, &[Stmt]) -> Result<()>,
-        paren: &Token,
+        _: &Token,
         args: &[Value],
     ) -> Result<Value> {
         let env = Environment::nested(self.closure.clone());
@@ -317,12 +323,16 @@ impl Callable for Function {
         defs.for_each(|(param, arg)| env.borrow_mut().define(&param.lexeme, arg.clone()));
 
         match execute_block(env, &self.body) {
-            Err(RuntimeException::Return(v)) => Ok(v),
+            Err(RuntimeException::Return(v)) => {
+                if self.is_initializer {
+                    self.this()
+                } else {
+                    Ok(v)
+                }
+            }
             Ok(_) => {
                 if self.is_initializer {
-                    let mut this = paren.clone();
-                    this.lexeme = "this".to_string();
-                    Environment::get_at(self.closure.clone(), 0, &this)
+                    self.this()
                 } else {
                     Ok(V(Nil))
                 }
@@ -1121,6 +1131,23 @@ mod spec {
                  var a = A();
                  print a.init();"),
             "A instance\nA instance\nA instance\n"
+        );
+        assert_eq!(
+            run("class A {init(){return;} }
+                 var a = A();
+                 print a.init();"),
+            "A instance\n"
+        );
+        assert_eq!(
+            run("class A {init(){this.b=1;return;this.b=2;} }
+                 var a = A();
+                 print a.b;"),
+            "1\n"
+        );
+        assert_eq!(
+            run("class A {init(){return 1;} }
+                 A();"),
+            "[line 1] Error at \'return\': Cannot return a value from an initializer\n"
         );
         assert_eq!(
             run("class A {init(b){this.b = b;} }
