@@ -253,6 +253,8 @@ impl<'a, W: Write> Parser<'a, W> {
         if self.matches(&[Equal]) {
             if let Expr::Variable(name) = expr {
                 Ok(Expr::Asign(name, Rc::new(self.assignment()?)))
+            } else if let Expr::Get(object, name) = expr {
+                Ok(Expr::Set(object, name, Rc::new(self.assignment()?)))
             } else {
                 self.error(self.previous(), "Invalid assignment target.")
             }
@@ -353,8 +355,15 @@ impl<'a, W: Write> Parser<'a, W> {
         use TokenType::*;
 
         let mut expr = self.primary()?;
-        while self.matches(&[LeftParen]) {
-            expr = self.finish_call(expr)?;
+        loop {
+            if self.matches(&[LeftParen]) {
+                expr = self.finish_call(expr)?;
+            } else if self.matches(&[Dot]) {
+                let name = self.consume(Identifier, "Expect property name after '.'.")?;
+                expr = Expr::Get(Rc::new(expr), name);
+            } else {
+                break;
+            }
         }
 
         Ok(expr)
@@ -1111,6 +1120,22 @@ mod spec {
         assert_eq!(
             parse("class a"),
             vec!["[line 1] Error at end: Expect \'{\' before class body."]
+        );
+    }
+
+    #[test]
+    fn property() {
+        assert_eq!(
+            parse("egg.scramble(3).with(cheddar);"),
+            vec!["(expr ((get ((get egg :scramble) 3) :with) cheddar))"]
+        );
+        assert_eq!(
+            parse("breakfast.omlette.filling.meat = ham;"),
+            vec!["(expr (set (get (get breakfast :omlette) :filling) :meat ham))"]
+        );
+        assert_eq!(
+            parse("a.;"),
+            vec!["[line 1] Error at \';\': Expect property name after \'.\'."]
         );
     }
 }

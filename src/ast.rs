@@ -21,10 +21,12 @@ pub enum Expr {
     Asign(Token, Rc<Expr>),
     Binary(Rc<Expr>, Token, Rc<Expr>),
     Call(Rc<Expr>, Token, Vec<Expr>),
+    Get(Rc<Expr>, Token),
     Grouping(Rc<Expr>),
     Literal(Literal),
     Logical(Rc<Expr>, Token, Rc<Expr>),
     Unary(Token, Rc<Expr>),
+    Set(Rc<Expr>, Token, Rc<Expr>),
     Variable(Token),
 }
 
@@ -67,10 +69,12 @@ impl Display for Expr {
             Asign(name, value) => write!(f, "(set! {} {})", name, value),
             Binary(left, op, right) => write!(f, "({} {} {})", op, left, right),
             Call(callee, _, args) => write!(f, "({} {})", callee, join(args, " ")),
+            Get(object, name) => write!(f, "(get {} :{})", object, name),
             Grouping(expr) => write!(f, "(group {})", expr),
             Literal(value) => write!(f, "{}", value),
             Logical(left, op, right) => write!(f, "({} {} {})", op, left, right),
             Unary(op, right) => write!(f, "({} {})", op, right),
+            Set(object, name, value) => write!(f, "(set {} :{} {})", object, name, value),
             Variable(name) => write!(f, "{}", name),
         }
     }

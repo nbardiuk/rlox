@@ -4,6 +4,7 @@ use crate::environment::EnvRef;
 use crate::environment::Environment;
 use crate::lox::Lox;
 use crate::token::{self, Literal::*, Token, TokenType as t};
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt;
 use std::io::Write;
@@ -164,6 +165,13 @@ fn evaluate<W: Write>(
                 err(paren, "Can only call functions and classes.")
             }
         }
+        Get(object, name) => {
+            if let I(i) = evaluate(lox, env, locals, &object)? {
+                i.get(name)
+            } else {
+                err(&name, "Only instances have properties.")
+            }
+        }
         Grouping(expression) => evaluate(lox, env, locals, &expression),
         Literal(value) => Ok(V(value.clone())),
         Logical(left, op, right) => {
@@ -179,6 +187,15 @@ fn evaluate<W: Write>(
             (t::Minus, V(Number(d))) => Ok(V(Number(-d))),
             _ => err(op, "Operand must be a number"),
         },
+        Set(object, name, value) => {
+            if let I(i) = evaluate(lox, env.clone(), locals, &object)? {
+                let v = evaluate(lox, env, locals, &value)?;
+                i.set(name, v.clone());
+                Ok(v)
+            } else {
+                err(&name, "Only instances have fields.")
+            }
+        }
         Variable(name) => lookup_variable(env, locals, name, expr),
     }
 }
@@ -200,7 +217,7 @@ fn lookup_variable(
 pub enum Value {
     V(token::Literal),
     F(Rc<dyn Callable>),
-    I(Instance),
+    I(Rc<Instance>),
 }
 
 impl fmt::Display for Value {
@@ -311,9 +328,7 @@ impl Callable for Class {
         _: &Token,
         args: &[Value],
     ) -> Result<Value> {
-        Ok(I(Instance {
-            class: self.clone(),
-        }))
+        Ok(I(Rc::new(Instance::new(self))))
     }
 
     fn arity(&self) -> usize {
@@ -324,10 +339,31 @@ impl Callable for Class {
 #[derive(Clone)]
 pub struct Instance {
     class: Class,
+    fields: RefCell<HashMap<std::string::String, Value>>,
 }
 impl fmt::Display for Instance {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{} instance", self.class.name,)
+    }
+}
+impl Instance {
+    fn new(class: &Class) -> Self {
+        Self {
+            class: class.clone(),
+            fields: RefCell::new(HashMap::default()),
+        }
+    }
+
+    fn set(&self, name: &Token, value: Value) {
+        self.fields.borrow_mut().insert(name.lexeme.clone(), value);
+    }
+
+    fn get(&self, name: &Token) -> Result<Value> {
+        if let Some(v) = self.fields.borrow().get(&name.lexeme) {
+            Ok(v.clone())
+        } else {
+            err(name, &format!("Undefined property '{}'.", name))
+        }
     }
 }
 
@@ -932,6 +968,36 @@ mod spec {
                  var bagel = Bagel();
                  print bagel;"),
             "Bagel instance\n"
+        );
+    }
+
+    #[test]
+    fn fields() {
+        assert_eq!(
+            run("class A {}
+                 var a = A();
+                 a.c = 1;
+                 print a.c;"),
+            "1\n"
+        );
+        assert_eq!(
+            run("class A {}
+                 var a = A();
+                 a.b = a;
+                 a.c = 1;
+                 print a.c;
+                 print a.b.c;"),
+            "1\n1\n"
+        );
+        assert_eq!(
+            run("class A {}
+                 var a = A();
+                 print a.b;"),
+            "[line 3] Undefined property \'b\'.\n"
+        );
+        assert_eq!(
+            run("print 1.a;"),
+            "[line 1] Only instances have properties.\n"
         );
     }
 }

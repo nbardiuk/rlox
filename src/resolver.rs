@@ -99,6 +99,9 @@ impl Resolver {
                     self.resolve_expr(lox, arg);
                 }
             }
+            Get(object, _name) => {
+                self.resolve_expr(lox, object);
+            }
             Grouping(expression) => {
                 self.resolve_expr(lox, expression);
             }
@@ -114,6 +117,10 @@ impl Resolver {
                     }
                 }
                 self.resolve_local(name, expr);
+            }
+            Set(object, _name, value) => {
+                self.resolve_expr(lox, value);
+                self.resolve_expr(lox, object);
             }
             Unary(_op, right) => {
                 self.resolve_expr(lox, right);
