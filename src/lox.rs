@@ -58,7 +58,7 @@ impl<W: Write> Lox<W> {
         let mut resolver = Resolver::new();
         resolver.resolve_stmts(self, &statements);
 
-        Interpreter::new(self).interpret(env, &resolver.locals, statements);
+        Interpreter::new(self, &resolver.locals).interpret(env, statements);
     }
 
     pub fn run_file(&mut self, path: &str) -> io::Result<()> {
