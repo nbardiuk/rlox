@@ -53,9 +53,10 @@ fn execute<W: Write>(
         Block(statements) => {
             execute_block(lox, Environment::nested(env), locals, &statements)?;
         }
-        Class(name, methods) => {
+        Class(name, _methods) => {
             env.borrow_mut().define(&name.lexeme, V(Nil));
-            env.borrow_mut().assign(name, C(name.lexeme.clone()));
+            env.borrow_mut()
+                .assign(name, F(Rc::new(Class { name: name.clone() })))?;
         }
         Expression(expression) => {
             evaluate(lox, env, locals, &expression).map(|_| ())?;
@@ -199,7 +200,7 @@ fn lookup_variable(
 pub enum Value {
     V(token::Literal),
     F(Rc<dyn Callable>),
-    C(std::string::String),
+    I(Instance),
 }
 
 impl fmt::Display for Value {
@@ -207,7 +208,7 @@ impl fmt::Display for Value {
         match self {
             V(l) => write!(f, "{}", l),
             F(c) => write!(f, "{}", c),
-            C(n) => write!(f, "{}", n),
+            I(i) => write!(f, "{}", i),
         }
     }
 }
@@ -289,6 +290,44 @@ impl Callable for Function {
 
     fn arity(&self) -> usize {
         self.params.len()
+    }
+}
+
+#[derive(Clone)]
+struct Class {
+    name: Token,
+}
+
+impl fmt::Display for Class {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.name,)
+    }
+}
+
+impl Callable for Class {
+    fn call(
+        &self,
+        execute_block: &mut dyn FnMut(EnvRef, &[Stmt]) -> Result<()>,
+        _: &Token,
+        args: &[Value],
+    ) -> Result<Value> {
+        Ok(I(Instance {
+            class: self.clone(),
+        }))
+    }
+
+    fn arity(&self) -> usize {
+        0
+    }
+}
+
+#[derive(Clone)]
+pub struct Instance {
+    class: Class,
+}
+impl fmt::Display for Instance {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{} instance", self.class.name,)
     }
 }
 
@@ -883,6 +922,16 @@ mod spec {
                  }
                  print DevonshireCream;"),
             "DevonshireCream\n"
+        );
+    }
+
+    #[test]
+    fn instance() {
+        assert_eq!(
+            run("class Bagel {}
+                 var bagel = Bagel();
+                 print bagel;"),
+            "Bagel instance\n"
         );
     }
 }
