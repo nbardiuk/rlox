@@ -400,6 +400,9 @@ impl<'a, W: Write> Parser<'a, W> {
             self.consume(RightParen, "Expect ')' after expression.")?;
             return Ok(Expr::Grouping(Rc::new(expr)));
         }
+        if self.matches(&[This]) {
+            return Ok(Expr::This(self.previous()));
+        }
         if self.matches(&[Identifier]) {
             return Ok(Expr::Variable(self.previous()));
         }
@@ -1136,6 +1139,26 @@ mod spec {
         assert_eq!(
             parse("a.;"),
             vec!["[line 1] Error at \';\': Expect property name after \'.\'."]
+        );
+    }
+
+    #[test]
+    fn this() {
+        assert_eq!(
+            parse("class A {m(){return this;}}"),
+            vec!["(class A (defn m () (return this)))"]
+        );
+        assert_eq!(
+            parse("this.a = 1;"),
+            vec!["(expr (set this :a 1))"]
+        );
+        assert_eq!(
+            parse("this = 1;"),
+            vec!["[line 1] Error at \'=\': Invalid assignment target."]
+        );
+        assert_eq!(
+            parse("var this = 1;"),
+            vec!["[line 1] Error at \'this\': Expect variable name."]
         );
     }
 }

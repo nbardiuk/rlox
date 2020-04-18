@@ -52,11 +52,17 @@ impl<'a, W: Write> Resolver<'a, W> {
             Class(name, methods) => {
                 self.declare(name);
                 self.define(name);
+
+                self.begin_scope();
+                self.define_s("this");
+
                 for method in methods {
                     if let Function(_name, params, body) = method {
                         self.resolve_function(params, body, FunctionType::Method)
                     }
                 }
+
+                self.end_scope();
             }
             Expression(expression) => {
                 self.resolve_expr(expression);
@@ -141,6 +147,9 @@ impl<'a, W: Write> Resolver<'a, W> {
                 self.resolve_expr(value);
                 self.resolve_expr(object);
             }
+            This(keyword) => {
+                self.resolve_local(keyword, expr);
+            }
             Unary(_op, right) => {
                 self.resolve_expr(right);
             }
@@ -193,8 +202,12 @@ impl<'a, W: Write> Resolver<'a, W> {
     }
 
     fn define(&mut self, name: &Token) {
+        self.define_s(&name.lexeme);
+    }
+
+    fn define_s(&mut self, name: &str) {
         if let Some(scope) = self.scopes.last_mut() {
-            scope.insert(name.lexeme.clone(), true);
+            scope.insert(name.to_string(), true);
         }
     }
 }

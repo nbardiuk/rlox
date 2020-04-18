@@ -56,12 +56,12 @@ impl<'a, W: Write> Interpreter<'a, W> {
                     if let Function(name, params, body) = method {
                         ms.insert(
                             name.lexeme.clone(),
-                            F(Rc::new(Function {
+                            Function {
                                 name: name.clone(),
                                 params: params.clone(),
                                 body: body.to_vec(),
                                 closure: env.clone(),
-                            })),
+                            },
                         );
                     }
                 }
@@ -202,6 +202,7 @@ impl<'a, W: Write> Interpreter<'a, W> {
                     err(&name, "Only instances have fields.")
                 }
             }
+            This(keyword) => self.lookup_variable(env, keyword, expr),
             Variable(name) => self.lookup_variable(env, name, expr),
         }
     }
@@ -275,19 +276,30 @@ impl fmt::Display for Clock {
     }
 }
 
+#[derive(Clone)]
 struct Function {
     name: Token,
     params: Vec<Token>,
     body: Vec<Stmt>,
     closure: EnvRef,
 }
-
+impl Function {
+    fn bind(&self, instance: Instance) -> Self {
+        let closure = Environment::nested(self.closure.clone());
+        closure.borrow_mut().define("this", I(Rc::new(instance)));
+        Function {
+            name: self.name.clone(),
+            params: self.params.clone(),
+            body: self.body.clone(),
+            closure,
+        }
+    }
+}
 impl fmt::Display for Function {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "f#{}", self.name,)
     }
 }
-
 impl Callable for Function {
     fn call(
         &self,
@@ -315,10 +327,10 @@ impl Callable for Function {
 #[derive(Clone)]
 struct Class {
     name: Token,
-    methods: HashMap<std::string::String, Value>,
+    methods: HashMap<std::string::String, Function>,
 }
 impl Class {
-    fn find_method(&self, name: &str) -> Option<Value> {
+    fn find_method(&self, name: &str) -> Option<Function> {
         self.methods.get(name).cloned()
     }
 }
@@ -367,8 +379,8 @@ impl Instance {
     fn get(&self, name: &Token) -> Result<Value> {
         if let Some(v) = self.fields.borrow().get(&name.lexeme) {
             Ok(v.clone())
-        } else if let Some(v) = self.class.find_method(&name.lexeme) {
-            Ok(v)
+        } else if let Some(f) = self.class.find_method(&name.lexeme) {
+            Ok(F(Rc::new(f.bind(self.clone()))))
         } else {
             err(name, &format!("Undefined property '{}'.", name))
         }
@@ -1029,6 +1041,44 @@ mod spec {
                  box.function = notMethod;
                  box.function(\"argument\");"),
             "\"called function with argument\"\n"
+        );
+    }
+
+    #[test]
+    fn this() {
+        assert_eq!(
+            run("class Cake {
+                   taste() {
+                     var adjective = \"delicious\";
+                     print \"The \" + this.flavor + \" cake is \" + adjective + \"!\";
+                   }
+                 }
+                 var cake = Cake();
+                 cake.flavor = \"German chocolate\";
+                 cake.taste();"),
+            "\"The German chocolate cake is delicious!\"\n"
+        );
+        assert_eq!(
+            run("class Thing {
+                   getCallback() {
+                     fun localFunction() {
+                       print this;
+                     }
+                     return localFunction;
+                   }
+                 }
+                 var callback = Thing().getCallback();
+                 callback();"),
+            "Thing instance\n"
+        );
+        assert_eq!(
+            run("print this;"),
+            "[line 1] Undefined variable \'this\'.\n"
+        );
+        assert_eq!(
+            run("fun notAMethod(){ print this; }
+                notAMethod();"),
+            "[line 1] Undefined variable \'this\'.\n"
         );
     }
 }

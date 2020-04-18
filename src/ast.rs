@@ -27,6 +27,7 @@ pub enum Expr {
     Logical(Rc<Expr>, Token, Rc<Expr>),
     Unary(Token, Rc<Expr>),
     Set(Rc<Expr>, Token, Rc<Expr>),
+    This(Token),
     Variable(Token),
 }
 
@@ -75,6 +76,7 @@ impl Display for Expr {
             Logical(left, op, right) => write!(f, "({} {} {})", op, left, right),
             Unary(op, right) => write!(f, "({} {})", op, right),
             Set(object, name, value) => write!(f, "(set {} :{} {})", object, name, value),
+            This(_keyword) => write!(f, "this"),
             Variable(name) => write!(f, "{}", name),
         }
     }
