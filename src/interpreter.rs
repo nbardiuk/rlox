@@ -220,7 +220,7 @@ impl<'a, W: Write> Interpreter<'a, W> {
 pub enum Value {
     V(token::Literal),
     F(Rc<dyn Callable>),
-    I(Rc<Instance>),
+    I(Instance),
 }
 
 impl fmt::Display for Value {
@@ -286,7 +286,7 @@ struct Function {
 impl Function {
     fn bind(&self, instance: Instance) -> Self {
         let closure = Environment::nested(self.closure.clone());
-        closure.borrow_mut().define("this", I(Rc::new(instance)));
+        closure.borrow_mut().define("this", I(instance));
         Function {
             name: self.name.clone(),
             params: self.params.clone(),
@@ -342,22 +342,26 @@ impl fmt::Display for Class {
 impl Callable for Class {
     fn call(
         &self,
-        _: &mut dyn FnMut(EnvRef, &[Stmt]) -> Result<()>,
-        _: &Token,
-        _: &[Value],
+        execute_block: &mut dyn FnMut(EnvRef, &[Stmt]) -> Result<()>,
+        paren: &Token,
+        args: &[Value],
     ) -> Result<Value> {
-        Ok(I(Rc::new(Instance::new(self))))
+        let this = Instance::new(self);
+        if let Some(init) = self.find_method("init") {
+            init.bind(this.clone()).call(execute_block, paren, args)?;
+        }
+        Ok(I(this))
     }
 
     fn arity(&self) -> usize {
-        0
+        self.find_method("init").map(|i| i.arity()).unwrap_or(0)
     }
 }
 
 #[derive(Clone)]
 pub struct Instance {
     class: Class,
-    fields: RefCell<HashMap<std::string::String, Value>>,
+    fields: Rc<RefCell<HashMap<std::string::String, Value>>>,
 }
 impl fmt::Display for Instance {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -368,7 +372,7 @@ impl Instance {
     fn new(class: &Class) -> Self {
         Self {
             class: class.clone(),
-            fields: RefCell::new(HashMap::default()),
+            fields: Rc::new(RefCell::new(HashMap::default())),
         }
     }
 
@@ -1084,6 +1088,32 @@ mod spec {
             run("fun notAMethod(){ print this; }
                 notAMethod();"),
             "[line 1] Error at \'this\': Cannot use \'this\' outside of a class\n"
+        );
+    }
+    #[test]
+    fn constructor() {
+        assert_eq!(
+            run("class A {init(){this.c = 1;} }
+                 var a = A();
+                 print a.c;"),
+            "1\n"
+        );
+        assert_eq!(
+            run("class A {init(b){this.b = b;} }
+                 var a = A(1);
+                 print a.b;"),
+            "1\n"
+        );
+        assert_eq!(
+            run("class A {init(){print this;} }
+                 var a = A();
+                 print a.init();"),
+            "A instance\nA instance\nnil\n"
+        );
+        assert_eq!(
+            run("class A {init(b){this.b = b;} }
+                 A();"),
+            "[line 2] Expected 1 arguments but got 0.\n"
         );
     }
 }
