@@ -342,9 +342,9 @@ impl fmt::Display for Class {
 impl Callable for Class {
     fn call(
         &self,
-        execute_block: &mut dyn FnMut(EnvRef, &[Stmt]) -> Result<()>,
+        _: &mut dyn FnMut(EnvRef, &[Stmt]) -> Result<()>,
         _: &Token,
-        args: &[Value],
+        _: &[Value],
     ) -> Result<Value> {
         Ok(I(Rc::new(Instance::new(self))))
     }
@@ -1073,12 +1073,14 @@ mod spec {
         );
         assert_eq!(
             run("print this;"),
-            "[line 1] Undefined variable \'this\'.\n"
+            "[line 1] Error at \'this\': Cannot use \'this\' outside of a class\n\
+             [line 1] Undefined variable \'this\'.\n"
         );
         assert_eq!(
             run("fun notAMethod(){ print this; }
                 notAMethod();"),
-            "[line 1] Undefined variable \'this\'.\n"
+            "[line 1] Error at \'this\': Cannot use \'this\' outside of a class\n\
+             [line 1] Undefined variable \'this\'.\n"
         );
     }
 }

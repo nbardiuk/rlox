@@ -9,6 +9,7 @@ pub struct Resolver<'a, W: Write> {
     scopes: Vec<HashMap<String, bool>>,
     pub locals: HashMap<Expr, usize>,
     function: FunctionType,
+    class: ClassType,
     lox: &'a mut Lox<W>,
 }
 
@@ -19,12 +20,19 @@ enum FunctionType {
     Method,
 }
 
+#[derive(Clone, Copy, PartialEq)]
+enum ClassType {
+    None,
+    Class,
+}
+
 impl<'a, W: Write> Resolver<'a, W> {
     pub fn new(lox: &'a mut Lox<W>) -> Self {
         Self {
             scopes: vec![],
             locals: HashMap::default(),
             function: FunctionType::None,
+            class: ClassType::None,
             lox,
         }
     }
@@ -46,23 +54,30 @@ impl<'a, W: Write> Resolver<'a, W> {
         match statement {
             Block(statements) => {
                 self.begin_scope();
-                self.resolve_stmts(statements);
+                {
+                    self.resolve_stmts(statements);
+                }
                 self.end_scope();
             }
             Class(name, methods) => {
-                self.declare(name);
-                self.define(name);
+                let enclosing_class = self.class;
+                self.class = ClassType::Class;
+                {
+                    self.declare(name);
+                    self.define(name);
 
-                self.begin_scope();
-                self.define_s("this");
-
-                for method in methods {
-                    if let Function(_name, params, body) = method {
-                        self.resolve_function(params, body, FunctionType::Method)
+                    self.begin_scope();
+                    {
+                        self.define_s("this");
+                        for method in methods {
+                            if let Function(_name, params, body) = method {
+                                self.resolve_function(params, body, FunctionType::Method)
+                            }
+                        }
                     }
+                    self.end_scope();
                 }
-
-                self.end_scope();
+                self.class = enclosing_class;
             }
             Expression(expression) => {
                 self.resolve_expr(expression);
@@ -148,6 +163,10 @@ impl<'a, W: Write> Resolver<'a, W> {
                 self.resolve_expr(object);
             }
             This(keyword) => {
+                if self.class == ClassType::None {
+                    self.lox
+                        .error_token(keyword, "Cannot use 'this' outside of a class");
+                }
                 self.resolve_local(keyword, expr);
             }
             Unary(_op, right) => {
@@ -159,13 +178,17 @@ impl<'a, W: Write> Resolver<'a, W> {
     fn resolve_function(&mut self, params: &[Token], body: &[Stmt], function: FunctionType) {
         let enclosing_functoin = self.function;
         self.function = function;
-        self.begin_scope();
-        for param in params {
-            self.declare(param);
-            self.define(param);
+        {
+            self.begin_scope();
+            {
+                for param in params {
+                    self.declare(param);
+                    self.define(param);
+                }
+                self.resolve_stmts(body);
+            }
+            self.end_scope();
         }
-        self.resolve_stmts(body);
-        self.end_scope();
         self.function = enclosing_functoin;
     }
 
