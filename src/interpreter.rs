@@ -265,7 +265,7 @@ impl<'a> Interpreter<'a> {
             for arg in args {
                 ars.push(self.evaluate(env.clone(), arg)?);
             }
-            callee.call(&mut |env, body| self.execute_block(env, body), paren, &ars)
+            callee.call(self, paren, &ars)
         }
     }
 }
@@ -290,13 +290,7 @@ impl fmt::Display for Value {
 }
 
 pub trait Callable: fmt::Display {
-    fn call(
-        &self,
-        execute_block: &mut dyn FnMut(EnvRef, &[Stmt]) -> Result<()>,
-        paren: &Token,
-        args: &[Value],
-    ) -> Result<Value>;
-
+    fn call(&self, interpreter: &mut Interpreter, paren: &Token, args: &[Value]) -> Result<Value>;
     fn arity(&self) -> usize;
 }
 
@@ -315,12 +309,7 @@ impl Callable for Clock {
         0
     }
 
-    fn call(
-        &self,
-        _: &mut dyn FnMut(EnvRef, &[Stmt]) -> Result<()>,
-        _: &Token,
-        _: &[Value],
-    ) -> Result<Value> {
+    fn call(&self, _: &mut Interpreter, _: &Token, _: &[Value]) -> Result<Value> {
         let now = Instant::now();
         Ok(V(Number(now.duration_since(self.start).as_secs_f64())))
     }
@@ -365,18 +354,13 @@ impl fmt::Display for Function {
     }
 }
 impl Callable for Function {
-    fn call(
-        &self,
-        execute_block: &mut dyn FnMut(EnvRef, &[Stmt]) -> Result<()>,
-        _: &Token,
-        args: &[Value],
-    ) -> Result<Value> {
+    fn call(&self, interpreter: &mut Interpreter, _: &Token, args: &[Value]) -> Result<Value> {
         let env = Environment::nested(self.closure.clone());
 
         let defs = self.params.iter().zip(args.iter());
         defs.for_each(|(param, arg)| env.borrow_mut().define(&param.lexeme, arg.clone()));
 
-        match execute_block(env, &self.body) {
+        match interpreter.execute_block(env, &self.body) {
             Err(RuntimeException::Return(v)) => {
                 if self.is_initializer {
                     self.this()
@@ -423,15 +407,10 @@ impl fmt::Display for Class {
     }
 }
 impl Callable for Class {
-    fn call(
-        &self,
-        execute_block: &mut dyn FnMut(EnvRef, &[Stmt]) -> Result<()>,
-        paren: &Token,
-        args: &[Value],
-    ) -> Result<Value> {
+    fn call(&self, interpreter: &mut Interpreter, paren: &Token, args: &[Value]) -> Result<Value> {
         let this = Instance::new(self);
         if let Some(init) = self.find_method("init") {
-            init.bind(this.clone()).call(execute_block, paren, args)?;
+            init.bind(this.clone()).call(interpreter, paren, args)?;
         }
         Ok(I(this))
     }
