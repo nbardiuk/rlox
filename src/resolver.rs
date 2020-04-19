@@ -60,18 +60,26 @@ impl<'a, W: Write> Resolver<'a, W> {
                 }
                 self.end_scope();
             }
-            Class(name, methods) => {
+            Class(name, superclass, methods) => {
                 let enclosing_class = self.class;
                 self.class = ClassType::Class;
                 {
                     self.declare(name);
                     self.define(name);
 
+                    if let Some(Variable(sup)) = superclass { // FIXME we know it always variable but info is lost
+                        if name.lexeme == sup.lexeme {
+                            self.lox
+                                .error_token(sup, "A class cannot inherit from itself.");
+                        }
+                        self.resolve_expr(&Variable(sup.clone()));
+                    }
+
                     self.begin_scope();
                     {
                         self.define_s("this");
                         for method in methods {
-                            if let Function(name, params, body) = method {
+                            if let Function(name, params, body) = method { // FIXME we know it always function but info is lost
                                 let declaration = if name.lexeme == "init" {
                                     FunctionType::Initializer
                                 } else {

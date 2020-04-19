@@ -87,6 +87,14 @@ impl<'a, W: Write> Parser<'a, W> {
         use TokenType::*;
         let name = self.consume(Identifier, "Expect class name.")?;
 
+        let superclass = if self.matches(&[Less]) {
+            Some(Expr::Variable(
+                self.consume(Identifier, "Expect superclass name.")?,
+            ))
+        } else {
+            None
+        };
+
         self.consume(LeftBrace, "Expect '{' before class body.")?;
 
         let mut methods = vec![];
@@ -95,7 +103,7 @@ impl<'a, W: Write> Parser<'a, W> {
         }
         self.consume(RightBrace, "Expect '}' after class body.")?;
 
-        Ok(Stmt::Class(name, methods))
+        Ok(Stmt::Class(name, superclass, methods))
     }
 
     fn var_declaration(&mut self) -> Result<Stmt, ParserError> {
@@ -501,7 +509,7 @@ mod spec {
     fn not_expression() {
         assert_eq!(
             parse("anything\nnot valid"),
-            vec!["[line 2] Error at \'not\': Expect \';\' after value."]
+            vec!["[line 2] Error at 'not': Expect ';' after value."]
         );
     }
 
@@ -538,7 +546,7 @@ mod spec {
         );
         assert_eq!(
             parse("/1"),
-            vec!["[line 1] Error at \'/\': Expect expression."]
+            vec!["[line 1] Error at '/': Expect expression."]
         );
     }
 
@@ -553,7 +561,7 @@ mod spec {
         );
         assert_eq!(
             parse("*1"),
-            vec!["[line 1] Error at \'*\': Expect expression."]
+            vec!["[line 1] Error at '*': Expect expression."]
         );
     }
 
@@ -578,7 +586,7 @@ mod spec {
         );
         assert_eq!(
             parse("+1"),
-            vec!["[line 1] Error at \'+\': Expect expression."]
+            vec!["[line 1] Error at '+': Expect expression."]
         );
     }
 
@@ -606,7 +614,7 @@ mod spec {
         );
         assert_eq!(
             parse(">1"),
-            vec!["[line 1] Error at \'>\': Expect expression."]
+            vec!["[line 1] Error at '>': Expect expression."]
         );
     }
 
@@ -621,7 +629,7 @@ mod spec {
         );
         assert_eq!(
             parse(">=1"),
-            vec!["[line 1] Error at \'>=\': Expect expression."]
+            vec!["[line 1] Error at '>=': Expect expression."]
         );
     }
 
@@ -636,7 +644,7 @@ mod spec {
         );
         assert_eq!(
             parse("<1"),
-            vec!["[line 1] Error at \'<\': Expect expression."]
+            vec!["[line 1] Error at '<': Expect expression."]
         );
     }
 
@@ -651,7 +659,7 @@ mod spec {
         );
         assert_eq!(
             parse("<=1"),
-            vec!["[line 1] Error at \'<=\': Expect expression."]
+            vec!["[line 1] Error at '<=': Expect expression."]
         );
     }
 
@@ -669,7 +677,7 @@ mod spec {
         );
         assert_eq!(
             parse("==1"),
-            vec!["[line 1] Error at \'==\': Expect expression."]
+            vec!["[line 1] Error at '==': Expect expression."]
         );
     }
 
@@ -687,7 +695,7 @@ mod spec {
         );
         assert_eq!(
             parse("!=1"),
-            vec!["[line 1] Error at \'!=\': Expect expression."]
+            vec!["[line 1] Error at '!=': Expect expression."]
         );
     }
 
@@ -704,15 +712,15 @@ mod spec {
         );
         assert_eq!(
             parse(")"),
-            vec!["[line 1] Error at \')\': Expect expression."]
+            vec!["[line 1] Error at ')': Expect expression."]
         );
         assert_eq!(
             parse("1)"),
-            vec!["[line 1] Error at \')\': Expect \';\' after value."]
+            vec!["[line 1] Error at ')': Expect ';' after value."]
         );
         assert_eq!(
             parse("(1"),
-            vec!["[line 1] Error at end: Expect \')\' after expression."]
+            vec!["[line 1] Error at end: Expect ')' after expression."]
         );
     }
 
@@ -725,14 +733,11 @@ mod spec {
         );
         assert_eq!(
             parse("1"),
-            vec!["[line 1] Error at end: Expect \';\' after value."]
+            vec!["[line 1] Error at end: Expect ';' after value."]
         );
         assert_eq!(
             parse("1;2"),
-            vec![
-                "[line 1] Error at end: Expect \';\' after value.",
-                "(expr 1)"
-            ]
+            vec!["[line 1] Error at end: Expect ';' after value.", "(expr 1)"]
         );
     }
 
@@ -750,7 +755,7 @@ mod spec {
         assert_eq!(
             parse("print 1;2"),
             vec![
-                "[line 1] Error at end: Expect \';\' after value.",
+                "[line 1] Error at end: Expect ';' after value.",
                 "(print 1)"
             ]
         );
@@ -772,8 +777,8 @@ mod spec {
                 "
             ),
             vec![
-                "[line 2] Error at \'-\': Expect \';\' after variable declaration",
-                "[line 4] Error at \'0\': Expect variable name.",
+                "[line 2] Error at '-': Expect ';' after variable declaration",
+                "[line 4] Error at '0': Expect variable name.",
                 "(def snake_case true)",
                 "(def camelCase true)",
                 "(def _0name true)"
@@ -810,9 +815,9 @@ mod spec {
                 "
             ),
             vec![
-                "[line 1] Error at \'=\': Invalid assignment target.",
-                "[line 2] Error at \'=\': Invalid assignment target.",
-                "[line 3] Error at \'=\': Invalid assignment target."
+                "[line 1] Error at '=': Invalid assignment target.",
+                "[line 2] Error at '=': Invalid assignment target.",
+                "[line 3] Error at '=': Invalid assignment target."
             ]
         );
     }
@@ -826,13 +831,13 @@ mod spec {
         );
         assert_eq!(
             parse("a = {b = 1};"),
-            vec!["[line 1] Error at \'{\': Expect expression."]
+            vec!["[line 1] Error at '{': Expect expression."]
         );
         assert_eq!(
             parse("{\n{"),
             vec![
-                "[line 2] Error at end: Expect \'}\' after block",
-                "[line 2] Error at end: Expect \'}\' after block"
+                "[line 2] Error at end: Expect '}' after block",
+                "[line 2] Error at end: Expect '}' after block"
             ]
         );
     }
@@ -854,22 +859,22 @@ mod spec {
         assert_eq!(
             parse("if a 1; else 2;"),
             vec![
-                "[line 1] Error at \'a\': Expect \'(\' after if.",
-                "[line 1] Error at \'else\': Expect expression."
+                "[line 1] Error at 'a': Expect '(' after if.",
+                "[line 1] Error at 'else': Expect expression."
             ]
         );
         assert_eq!(
             parse("if (a 1; else 2;"),
             vec![
-                "[line 1] Error at \'1\': Expect \')\' after condition.",
-                "[line 1] Error at \'else\': Expect expression."
+                "[line 1] Error at '1': Expect ')' after condition.",
+                "[line 1] Error at 'else': Expect expression."
             ]
         );
         assert_eq!(
             parse("if (a); 1; else 2;"),
             vec![
-                "[line 1] Error at \';\': Expect expression.",
-                "[line 1] Error at \'else\': Expect expression.",
+                "[line 1] Error at ';': Expect expression.",
+                "[line 1] Error at 'else': Expect expression.",
                 "(expr 1)"
             ]
         );
@@ -906,17 +911,17 @@ mod spec {
         );
         assert_eq!(
             parse("while true {}"),
-            vec!["[line 1] Error at \'true\': Expect \'(\' after while."]
+            vec!["[line 1] Error at 'true': Expect '(' after while."]
         );
         assert_eq!(
             parse("while (true {}"),
-            vec!["[line 1] Error at \'{\': Expect \')\' after condition."]
+            vec!["[line 1] Error at '{': Expect ')' after condition."]
         );
         assert_eq!(
             parse("while (print 1;) {}"),
             vec![
-                "[line 1] Error at \'print\': Expect expression.",
-                "[line 1] Error at \')\': Expect expression."
+                "[line 1] Error at 'print': Expect expression.",
+                "[line 1] Error at ')': Expect expression."
             ]
         );
     }
@@ -951,25 +956,25 @@ mod spec {
         );
         assert_eq!(
             parse("for () {}"),
-            vec!["[line 1] Error at \')\': Expect expression."]
+            vec!["[line 1] Error at ')': Expect expression."]
         );
         assert_eq!(
             parse("for (1) {}"),
-            vec!["[line 1] Error at \')\': Expect \';\' after value."]
+            vec!["[line 1] Error at ')': Expect ';' after value."]
         );
         assert_eq!(
             parse("for (1;) {}"),
-            vec!["[line 1] Error at \')\': Expect expression."]
+            vec!["[line 1] Error at ')': Expect expression."]
         );
         assert_eq!(
             parse("for (1;2) {}"),
-            vec!["[line 1] Error at \')\': Expect \';\' after loop condition."]
+            vec!["[line 1] Error at ')': Expect ';' after loop condition."]
         );
         assert_eq!(
             parse("for (1;2;3;) {}"),
             vec![
-                "[line 1] Error at \';\': Expect \')\' after for clauses.",
-                "[line 1] Error at \')\': Expect expression."
+                "[line 1] Error at ';': Expect ')' after for clauses.",
+                "[line 1] Error at ')': Expect expression."
             ]
         );
     }
@@ -986,11 +991,11 @@ mod spec {
         assert_eq!(parse("(i=1)(a);"), vec!["(expr ((group (set! i 1)) a))"]);
         assert_eq!(
             parse("a(1,);"),
-            vec!["[line 1] Error at \')\': Expect expression."]
+            vec!["[line 1] Error at ')': Expect expression."]
         );
         assert_eq!(
             parse("a(,1);"),
-            vec!["[line 1] Error at \',\': Expect expression."]
+            vec!["[line 1] Error at ',': Expect expression."]
         );
         assert_eq!(parse("a(
         1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
@@ -1012,7 +1017,7 @@ mod spec {
         1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
         1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
         1,1,1,1,1,1
-            );"), vec!["[line 7] Error at \'1\': Cannot have more than 255 arguments."]);
+            );"), vec!["[line 7] Error at '1': Cannot have more than 255 arguments."]);
     }
 
     #[test]
@@ -1025,23 +1030,23 @@ mod spec {
         );
         assert_eq!(
             parse("fun a(1){}"),
-            vec!["[line 1] Error at \'1\': Expect parameter name."]
+            vec!["[line 1] Error at '1': Expect parameter name."]
         );
         assert_eq!(
             parse("fun a(a b){}"),
-            vec!["[line 1] Error at \'b\': Expect \')\' after parameters."]
+            vec!["[line 1] Error at 'b': Expect ')' after parameters."]
         );
         assert_eq!(
             parse("fun (){}"),
-            vec!["[line 1] Error at \'(\': Expect function name."]
+            vec!["[line 1] Error at '(': Expect function name."]
         );
         assert_eq!(
             parse("fun a{}"),
-            vec!["[line 1] Error at \'{\': Expect \'(\' after function name."]
+            vec!["[line 1] Error at '{': Expect '(' after function name."]
         );
         assert_eq!(
             parse("fun a();"),
-            vec!["[line 1] Error at \';\': Expect \'{\' before function body."]
+            vec!["[line 1] Error at ';': Expect '{' before function body."]
         );
         assert_eq!(parse("fun a(
         b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,
@@ -1062,7 +1067,7 @@ mod spec {
         b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,
         b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,
         b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,b,
-        b,b,b,b,b,b){}"), vec!["[line 7] Error at \'b\': Cannot have more than 255 parameters."]);
+        b,b,b,b,b,b){}"), vec!["[line 7] Error at 'b': Cannot have more than 255 parameters."]);
     }
 
     #[test]
@@ -1075,13 +1080,18 @@ mod spec {
         );
         assert_eq!(
             parse("return 1+1"),
-            vec!["[line 1] Error at end: Expect \';\' after return value."]
+            vec!["[line 1] Error at end: Expect ';' after return value."]
         );
     }
 
     #[test]
     fn class() {
         assert_eq!(parse("class a {}"), vec!["(class a )"]);
+        assert_eq!(parse("class a < b {}"), vec!["(class a b )"]);
+        assert_eq!(
+            parse("class a < b {c(){}}"),
+            vec!["(class a b (defn c () ))"]
+        );
         assert_eq!(
             parse("class a {f(){}g(){}}"),
             vec!["(class a (defn f () ) (defn g () ))"]
@@ -1106,23 +1116,31 @@ mod spec {
             ]
         );
         assert_eq!(
+            parse("class a < {}"),
+            vec!["[line 1] Error at '{': Expect superclass name."]
+        );
+        assert_eq!(
+            parse("class a < b < c {}"),
+            vec!["[line 1] Error at '<': Expect '{' before class body."]
+        );
+        assert_eq!(
             parse("class a {var b = 1;}"),
             vec![
-                "[line 1] Error at \'var\': Expect method name.",
-                "[line 1] Error at \'}\': Expect expression."
+                "[line 1] Error at 'var': Expect method name.",
+                "[line 1] Error at '}': Expect expression."
             ]
         );
         assert_eq!(
             parse("class {}"),
-            vec!["[line 1] Error at \'{\': Expect class name."]
+            vec!["[line 1] Error at '{': Expect class name."]
         );
         assert_eq!(
             parse("class class {}"),
-            vec!["[line 1] Error at \'class\': Expect class name."]
+            vec!["[line 1] Error at 'class': Expect class name."]
         );
         assert_eq!(
             parse("class a"),
-            vec!["[line 1] Error at end: Expect \'{\' before class body."]
+            vec!["[line 1] Error at end: Expect '{' before class body."]
         );
     }
 
@@ -1138,7 +1156,7 @@ mod spec {
         );
         assert_eq!(
             parse("a.;"),
-            vec!["[line 1] Error at \';\': Expect property name after \'.\'."]
+            vec!["[line 1] Error at ';': Expect property name after '.'."]
         );
     }
 
@@ -1148,17 +1166,14 @@ mod spec {
             parse("class A {m(){return this;}}"),
             vec!["(class A (defn m () (return this)))"]
         );
-        assert_eq!(
-            parse("this.a = 1;"),
-            vec!["(expr (set this :a 1))"]
-        );
+        assert_eq!(parse("this.a = 1;"), vec!["(expr (set this :a 1))"]);
         assert_eq!(
             parse("this = 1;"),
-            vec!["[line 1] Error at \'=\': Invalid assignment target."]
+            vec!["[line 1] Error at '=': Invalid assignment target."]
         );
         assert_eq!(
             parse("var this = 1;"),
-            vec!["[line 1] Error at \'this\': Expect variable name."]
+            vec!["[line 1] Error at 'this': Expect variable name."]
         );
     }
 }

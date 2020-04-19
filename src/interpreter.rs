@@ -49,7 +49,17 @@ impl<'a, W: Write> Interpreter<'a, W> {
             Block(statements) => {
                 self.execute_block(Environment::nested(env), &statements)?;
             }
-            Class(name, methods) => {
+            Class(name, superclass, methods) => {
+                let superclass = if let Some(Variable(n)) = superclass {
+                    //FIXME we know it is always a variable but the info is lost
+                    if let C(s) = self.evaluate(env.clone(), &Variable(n.clone()))? {
+                        Some(Rc::new(s))
+                    } else {
+                        return err(n, "Superclass must be a class.");
+                    }
+                } else {
+                    None
+                };
                 env.borrow_mut().define(&name.lexeme, V(Nil));
                 let mut ms = HashMap::default();
                 for method in methods {
@@ -69,10 +79,11 @@ impl<'a, W: Write> Interpreter<'a, W> {
 
                 env.borrow_mut().assign(
                     name,
-                    F(Rc::new(Class {
+                    C(Class {
                         name: name.clone(),
+                        superclass,
                         methods: ms,
-                    })),
+                    }),
                 )?;
             }
             Expression(expression) => {
@@ -153,26 +164,11 @@ impl<'a, W: Write> Interpreter<'a, W> {
                     _ => err(op, "Operands must be numbers"),
                 }
             }
-            Call(callee, paren, args) => {
-                if let F(callee) = self.evaluate(env.clone(), callee)? {
-                    if args.len() != callee.arity() {
-                        let message = format!(
-                            "Expected {} arguments but got {}.",
-                            callee.arity(),
-                            args.len()
-                        );
-                        err(paren, &message)
-                    } else {
-                        let mut ars = vec![];
-                        for arg in args {
-                            ars.push(self.evaluate(env.clone(), arg)?);
-                        }
-                        callee.call(&mut |env, body| self.execute_block(env, body), paren, &ars)
-                    }
-                } else {
-                    err(paren, "Can only call functions and classes.")
-                }
-            }
+            Call(callee, paren, args) => match self.evaluate(env.clone(), callee)? {
+                C(callee) => self.call(env, Rc::new(callee), args, paren),
+                F(callee) => self.call(env, callee, args, paren),
+                _ => err(paren, "Can only call functions and classes."),
+            },
             Get(object, name) => {
                 if let I(i) = self.evaluate(env, &object)? {
                     i.get(name)
@@ -216,12 +212,36 @@ impl<'a, W: Write> Interpreter<'a, W> {
             Environment::global(env).borrow().get(name)
         }
     }
+
+    fn call(
+        &mut self,
+        env: EnvRef,
+        callee: Rc<dyn Callable>,
+        args: &[Expr],
+        paren: &Token,
+    ) -> Result<Value> {
+        if args.len() != callee.arity() {
+            let message = format!(
+                "Expected {} arguments but got {}.",
+                callee.arity(),
+                args.len()
+            );
+            err(paren, &message)
+        } else {
+            let mut ars = vec![];
+            for arg in args {
+                ars.push(self.evaluate(env.clone(), arg)?);
+            }
+            callee.call(&mut |env, body| self.execute_block(env, body), paren, &ars)
+        }
+    }
 }
 
 #[derive(Clone)]
 pub enum Value {
     V(token::Literal),
     F(Rc<dyn Callable>),
+    C(Class),
     I(Instance),
 }
 
@@ -231,6 +251,7 @@ impl fmt::Display for Value {
             V(l) => write!(f, "{}", l),
             F(c) => write!(f, "{}", c),
             I(i) => write!(f, "{}", i),
+            C(c) => write!(f, "{}", c),
         }
     }
 }
@@ -347,8 +368,9 @@ impl Callable for Function {
 }
 
 #[derive(Clone)]
-struct Class {
+pub struct Class {
     name: Token,
+    superclass: Option<Rc<Class>>,
     methods: HashMap<std::string::String, Function>,
 }
 impl Class {
@@ -649,13 +671,10 @@ mod spec {
 
     #[test]
     fn statement_error() {
-        assert_eq!(
-            run("1"),
-            "[line 1] Error at end: Expect \';\' after value.\n"
-        );
+        assert_eq!(run("1"), "[line 1] Error at end: Expect ';' after value.\n");
         assert_eq!(
             run("print 1"),
-            "[line 1] Error at end: Expect \';\' after value.\n"
+            "[line 1] Error at end: Expect ';' after value.\n"
         );
         assert_eq!(run("print"), "[line 1] Error at end: Expect expression.\n");
     }
@@ -676,7 +695,7 @@ mod spec {
         assert_eq!(
             run("print a;
                  var a = \"too late!\";"),
-            "[line 1] Undefined variable \'a\'.\n"
+            "[line 1] Undefined variable 'a'.\n"
         );
         assert_eq!(
             run("var a = 1;
@@ -687,7 +706,7 @@ mod spec {
              true\n"
         );
         assert_eq!(run("var a = 1; print a = 2;"), "2\n");
-        assert_eq!(run("a = 1;"), "[line 1] Undefined variable \'a\'.\n");
+        assert_eq!(run("a = 1;"), "[line 1] Undefined variable 'a'.\n");
         assert_eq!(
             run("var a;
                  var b;
@@ -709,7 +728,7 @@ mod spec {
         );
         assert_eq!(
             run("var a = b = c = 1;"),
-            "[line 1] Undefined variable \'c\'.\n"
+            "[line 1] Undefined variable 'c'.\n"
         );
     }
 
@@ -751,7 +770,7 @@ mod spec {
                    var a = a + 2;
                    print a;
                  }"),
-            "[line 3] Error at \'a\': Cannot read local variable in its own initializer.\n"
+            "[line 3] Error at 'a': Cannot read local variable in its own initializer.\n"
         );
         assert_eq!(
             run("{
@@ -760,7 +779,7 @@ mod spec {
                  {
                    a = 2;
                  }"),
-            "[line 5] Undefined variable \'a\'.\n"
+            "[line 5] Undefined variable 'a'.\n"
         );
         assert_eq!(
             run("{
@@ -768,7 +787,7 @@ mod spec {
                  }
                  a = 2;
                  "),
-            "[line 4] Undefined variable \'a\'.\n"
+            "[line 4] Undefined variable 'a'.\n"
         );
     }
 
@@ -828,11 +847,11 @@ mod spec {
         assert_eq!(run("while (false) { FAIL; } print 1;"), "1\n");
         assert_eq!(
             run("while (true) { FAIL; } print 1;"),
-            "[line 1] Undefined variable \'FAIL\'.\n"
+            "[line 1] Undefined variable 'FAIL'.\n"
         );
         assert_eq!(
             run("while (FAIL) { print 1; } print 2;"),
-            "[line 1] Undefined variable \'FAIL\'.\n"
+            "[line 1] Undefined variable 'FAIL'.\n"
         );
     }
 
@@ -854,22 +873,22 @@ mod spec {
         assert_eq!(run("for(;false;) FAIL; print 1;"), "1\n");
         assert_eq!(
             run("for(;true;FAIL) BREAK; print 1;"),
-            "[line 1] Undefined variable \'BREAK\'.\n"
+            "[line 1] Undefined variable 'BREAK'.\n"
         );
         assert_eq!(
             run("for(;true;FAIL) print 0; print 1;"),
             "0\n\
-            [line 1] Undefined variable \'FAIL\'.\n"
+            [line 1] Undefined variable 'FAIL'.\n"
         );
         assert_eq!(
             run("for(FAIL;true;) print 0; print 1;"),
-            "[line 1] Undefined variable \'FAIL\'.\n"
+            "[line 1] Undefined variable 'FAIL'.\n"
         );
         assert_eq!(run("var i=10;for(i=0;i<3;i=i+1){}print i;"), "3\n");
         assert_eq!(run("var i=true;for(var i=0;i<3;i=i+1){}print i;"), "true\n");
         assert_eq!(
             run("for(var i=0;i<3;i=i+1){}print i;"),
-            "[line 1] Undefined variable \'i\'.\n"
+            "[line 1] Undefined variable 'i'.\n"
         );
     }
 
@@ -877,7 +896,7 @@ mod spec {
     fn function_call() {
         assert_eq!(run("print clock() > 0 and clock() < 0.1;"), "true\n");
         assert_eq!(run("var f = clock; print f() < 0.1;"), "true\n");
-        assert_eq!(run("A(B,C);"), "[line 1] Undefined variable \'A\'.\n");
+        assert_eq!(run("A(B,C);"), "[line 1] Undefined variable 'A'.\n");
         assert_eq!(
             run("clock(B,C);"),
             "[line 1] Expected 0 arguments but got 2.\n"
@@ -926,7 +945,7 @@ mod spec {
                    var c = 0;
                  }
                  print c;"),
-            "[line 4] Undefined variable \'c\'.\n"
+            "[line 4] Undefined variable 'c'.\n"
         );
         assert_eq!(
             run("fun a() {
@@ -936,7 +955,7 @@ mod spec {
                    var c = 0;
                    a();
                  }"),
-            "[line 2] Undefined variable \'c\'.\n"
+            "[line 2] Undefined variable 'c'.\n"
         );
         assert_eq!(
             run("var c = 0;
@@ -964,7 +983,7 @@ mod spec {
         );
         assert_eq!(
             run("return 123; print 2;"),
-            "[line 1] Error at \'return\': Cannot return from top-level code\n"
+            "[line 1] Error at 'return': Cannot return from top-level code\n"
         );
     }
 
@@ -1043,7 +1062,7 @@ mod spec {
             run("class A {}
                  var a = A();
                  print a.b;"),
-            "[line 3] Undefined property \'b\'.\n"
+            "[line 3] Undefined property 'b'.\n"
         );
         assert_eq!(
             run("print 1.a;"),
@@ -1104,12 +1123,12 @@ mod spec {
         );
         assert_eq!(
             run("print this;"),
-            "[line 1] Error at \'this\': Cannot use \'this\' outside of a class\n"
+            "[line 1] Error at 'this': Cannot use 'this' outside of a class\n"
         );
         assert_eq!(
             run("fun notAMethod(){ print this; }
                 notAMethod();"),
-            "[line 1] Error at \'this\': Cannot use \'this\' outside of a class\n"
+            "[line 1] Error at 'this': Cannot use 'this' outside of a class\n"
         );
     }
     #[test]
@@ -1147,12 +1166,31 @@ mod spec {
         assert_eq!(
             run("class A {init(){return 1;} }
                  A();"),
-            "[line 1] Error at \'return\': Cannot return a value from an initializer\n"
+            "[line 1] Error at 'return': Cannot return a value from an initializer\n"
         );
         assert_eq!(
             run("class A {init(b){this.b = b;} }
                  A();"),
             "[line 2] Expected 1 arguments but got 0.\n"
+        );
+    }
+
+    #[test]
+    fn superclass() {
+        assert_eq!(
+            run("class A { }
+                 class B < A {}
+                 print B;"),
+            "B\n"
+        );
+        assert_eq!(
+            run("class A < A { }"),
+            "[line 1] Error at 'A': A class cannot inherit from itself.\n"
+        );
+        assert_eq!(
+            run("fun A() { }
+                 class B < A {}"),
+            "[line 2] Superclass must be a class.\n"
         );
     }
 }

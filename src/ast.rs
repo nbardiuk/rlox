@@ -6,7 +6,7 @@ use std::result::Result;
 #[derive(Clone)]
 pub enum Stmt {
     Block(Vec<Stmt>),
-    Class(Token, Vec<Stmt>),
+    Class(Token, Option<Expr>, Vec<Stmt>),
     Expression(Rc<Expr>),
     Function(Token, Vec<Token>, Vec<Stmt>),
     If(Rc<Expr>, Rc<Stmt>, Option<Rc<Stmt>>),
@@ -42,7 +42,14 @@ impl Display for Stmt {
         use Stmt::*;
         match self {
             Block(statemets) => write!(f, "(do {})", join(statemets, " ")),
-            Class(name, methods) => write!(f, "(class {} {})", name, join(methods, " ")),
+            Class(name, None, methods) => write!(f, "(class {} {})", name, join(methods, " ")),
+            Class(name, Some(superclass), methods) => write!(
+                f,
+                "(class {} {} {})",
+                name,
+                superclass,
+                join(methods, " ")
+            ),
             Expression(expr) => write!(f, "(expr {})", expr),
             Function(name, params, body) => write!(
                 f,
