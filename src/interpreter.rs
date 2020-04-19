@@ -1262,5 +1262,14 @@ mod spec {
                  C().test();"),
             "\"A method\"\n"
         );
+        assert_eq!(
+            run("super.m();"),
+            "[line 1] Error at 'super': Cannot use 'super' outside of a class\n"
+        );
+        assert_eq!(
+            run("class A { m(){super.cook();} }
+                 A().m();"),
+            "[line 1] Error at 'super': Cannot use 'super' in a class with not usperclass\n"
+        );
     }
 }

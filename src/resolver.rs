@@ -25,6 +25,7 @@ enum FunctionType {
 enum ClassType {
     None,
     Class,
+    Subclass,
 }
 
 impl<'a, W: Write> Resolver<'a, W> {
@@ -73,6 +74,7 @@ impl<'a, W: Write> Resolver<'a, W> {
                             self.lox
                                 .error_token(sup, "A class cannot inherit from itself.");
                         }
+                        self.class = ClassType::Subclass;
                         self.resolve_expr(&Variable(sup.clone()));
                     }
 
@@ -191,9 +193,15 @@ impl<'a, W: Write> Resolver<'a, W> {
                 self.resolve_expr(value);
                 self.resolve_expr(object);
             }
-            Super(keyword, _method) => {
-                self.resolve_local(keyword, expr);
-            }
+            Super(keyword, _method) => match self.class {
+                ClassType::None => self
+                    .lox
+                    .error_token(keyword, "Cannot use 'super' outside of a class"),
+                ClassType::Class => self
+                    .lox
+                    .error_token(keyword, "Cannot use 'super' in a class with not usperclass"),
+                ClassType::Subclass => self.resolve_local(keyword, expr),
+            },
             This(keyword) => {
                 if self.class == ClassType::None {
                     self.lox
