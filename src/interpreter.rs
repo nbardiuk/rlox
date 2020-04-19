@@ -16,12 +16,12 @@ pub type Result<T> = std::result::Result<T, RuntimeException>;
 
 pub struct Interpreter<'a> {
     lox: &'a mut Lox,
-    locals: &'a HashMap<Expr, usize>,
+    locals: &'a HashMap<Token, usize>,
     env: EnvRef,
 }
 
 impl<'a> Interpreter<'a> {
-    pub fn new(lox: &'a mut Lox, locals: &'a HashMap<Expr, usize>, env: EnvRef) -> Self {
+    pub fn new(lox: &'a mut Lox, locals: &'a HashMap<Token, usize>, env: EnvRef) -> Self {
         let global = Environment::global(env.clone());
         global
             .borrow_mut()
@@ -157,7 +157,7 @@ impl<'a> Interpreter<'a> {
         match expr {
             Asign(name, value) => {
                 let value = self.evaluate(value)?;
-                if let Some(distance) = self.locals.get(expr) {
+                if let Some(distance) = self.locals.get(name) {
                     Environment::assign_at(self.env.clone(), *distance, name, value)
                 } else {
                     Environment::global(self.env.clone())
@@ -219,7 +219,7 @@ impl<'a> Interpreter<'a> {
                 }
             }
             Super(keyword, method) => {
-                if let Some(distance) = self.locals.get(expr) {
+                if let Some(distance) = self.locals.get(keyword) {
                     if let C(superclass) =
                         Environment::get_at(self.env.clone(), *distance, keyword)?
                     {
@@ -238,13 +238,13 @@ impl<'a> Interpreter<'a> {
                 }
                 err(&keyword, "Should be a resolver error")
             }
-            This(keyword) => self.lookup_variable(keyword, expr),
-            Variable(name) => self.lookup_variable(name, expr),
+            This(keyword) => self.lookup_variable(keyword),
+            Variable(name) => self.lookup_variable(name),
         }
     }
 
-    fn lookup_variable(&self, name: &Token, expr: &Expr) -> Result<Value> {
-        if let Some(distance) = self.locals.get(expr) {
+    fn lookup_variable(&self, name: &Token) -> Result<Value> {
+        if let Some(distance) = self.locals.get(name) {
             Environment::get_at(self.env.clone(), *distance, name)
         } else {
             Environment::global(self.env.clone()).borrow().get(name)

@@ -15,7 +15,7 @@ pub enum Stmt {
     While(Expr, Box<Stmt>),
 }
 
-#[derive(Clone, Hash, Eq, PartialEq)]
+#[derive(Clone)]
 pub enum Expr {
     Asign(Token, Box<Expr>),
     Binary(Box<Expr>, Token, Box<Expr>),

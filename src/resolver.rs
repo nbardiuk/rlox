@@ -6,7 +6,7 @@ use std::collections::HashMap;
 
 pub struct Resolver<'a> {
     scopes: Vec<HashMap<String, bool>>,
-    pub locals: HashMap<Expr, usize>,
+    pub locals: HashMap<Token, usize>,
     function: FunctionType,
     class: ClassType,
     lox: &'a mut Lox,
@@ -154,7 +154,7 @@ impl<'a> Resolver<'a> {
         match expr {
             Asign(name, value) => {
                 self.resolve_expr(value);
-                self.resolve_local(name, expr);
+                self.resolve_local(name);
             }
             Binary(left, _op, right) => {
                 self.resolve_expr(left);
@@ -186,7 +186,7 @@ impl<'a> Resolver<'a> {
                         );
                     }
                 }
-                self.resolve_local(name, expr);
+                self.resolve_local(name);
             }
             Set(object, _name, value) => {
                 self.resolve_expr(value);
@@ -199,14 +199,14 @@ impl<'a> Resolver<'a> {
                 ClassType::Class => self
                     .lox
                     .error_token(keyword, "Cannot use 'super' in a class with not usperclass"),
-                ClassType::Subclass => self.resolve_local(keyword, expr),
+                ClassType::Subclass => self.resolve_local(keyword),
             },
             This(keyword) => {
                 if self.class == ClassType::None {
                     self.lox
                         .error_token(keyword, "Cannot use 'this' outside of a class");
                 }
-                self.resolve_local(keyword, expr);
+                self.resolve_local(keyword);
             }
             Unary(_op, right) => {
                 self.resolve_expr(right);
@@ -239,11 +239,11 @@ impl<'a> Resolver<'a> {
         self.scopes.pop();
     }
 
-    fn resolve_local(&mut self, name: &Token, expr: &Expr) {
+    fn resolve_local(&mut self, name: &Token) {
         let mut distance = 0;
         for scope in self.scopes.iter().rev() {
             if scope.contains_key(&name.lexeme) {
-                self.locals.insert(expr.clone(), distance);
+                self.locals.insert(name.clone(), distance);
                 return;
             }
             distance += 1;
