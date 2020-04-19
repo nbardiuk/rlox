@@ -375,7 +375,13 @@ pub struct Class {
 }
 impl Class {
     fn find_method(&self, name: &str) -> Option<Function> {
-        self.methods.get(name).cloned()
+        if self.methods.contains_key(name) {
+            self.methods.get(name).cloned()
+        } else if let Some(s) = &self.superclass {
+            s.find_method(name)
+        } else {
+            None
+        }
     }
 }
 impl fmt::Display for Class {
@@ -1191,6 +1197,20 @@ mod spec {
             run("fun A() { }
                  class B < A {}"),
             "[line 2] Superclass must be a class.\n"
+        );
+    }
+
+    #[test]
+    fn inhertinace() {
+        assert_eq!(
+            run("class Doughnut {
+                   cook() {
+                     print \"Fry until golden brown.\";
+                   }
+                 }
+                 class BostonCream < Doughnut {}
+                 BostonCream().cook();"),
+            "\"Fry until golden brown.\"\n"
         );
     }
 }
