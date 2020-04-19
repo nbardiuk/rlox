@@ -2,7 +2,6 @@ use crate::lox::Lox;
 use crate::token::Literal;
 use crate::token::Token;
 use crate::token::TokenType;
-use std::io::Write;
 
 pub struct Scanner<'a> {
     source: &'a str,
@@ -56,7 +55,7 @@ impl<'a> Scanner<'a> {
         }
     }
 
-    pub fn scan_tokens<W: Write>(&mut self, lox: &mut Lox<W>) -> Vec<Token> {
+    pub fn scan_tokens(&mut self, lox: &mut Lox) -> Vec<Token> {
         use TokenType::*;
         while !self.is_at_end() {
             // we are at the beginning of the next lexeme.
@@ -68,7 +67,7 @@ impl<'a> Scanner<'a> {
         self.tokens.clone()
     }
 
-    fn scan_token<W: Write>(&mut self, lox: &mut Lox<W>) {
+    fn scan_token(&mut self, lox: &mut Lox) {
         use TokenType::*;
         let c = self.advance();
         match c {
@@ -159,7 +158,7 @@ impl<'a> Scanner<'a> {
         self.add_literal_token(TokenType::Number, Literal::Number(d));
     }
 
-    fn string<W: Write>(&mut self, lox: &mut Lox<W>) {
+    fn string(&mut self, lox: &mut Lox) {
         while self.peek() != Some('"') && !self.is_at_end() {
             if self.peek() == Some('\n') {
                 self.line += 1;
@@ -221,18 +220,21 @@ impl<'a> Scanner<'a> {
 #[cfg(test)]
 mod spec {
     use super::*;
+    use std::cell::RefCell;
+    use std::rc::Rc;
     use TokenType::*;
 
     fn tokens<'a>(source: &'a str) -> Vec<Token> {
-        let mut lox = Lox::<Vec<u8>>::new();
-        assert_eq!(lox.output(), "");
+        let mut lox = Lox::new_t(Rc::new(RefCell::new(vec![])));
         Scanner::new(source).scan_tokens(&mut lox)
     }
 
     fn tokens_error<'a>(source: &'a str) -> (std::string::String, Vec<Token>) {
-        let mut lox = Lox::<Vec<u8>>::new();
+        let out = Rc::new(RefCell::new(vec![]));
+        let mut lox = Lox::new_t(out.clone());
         let tokens = Scanner::new(source).scan_tokens(&mut lox);
-        (lox.output(), tokens)
+        let v = out.borrow().to_vec();
+        (std::string::String::from_utf8(v).unwrap(), tokens)
     }
 
     #[test]

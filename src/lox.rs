@@ -7,41 +7,33 @@ use crate::resolver::Resolver;
 use crate::scanner::Scanner;
 use crate::token::Token;
 use crate::token::TokenType;
+use std::cell::RefCell;
 use std::fs;
 use std::io::{self, Write};
 use std::process;
+use std::rc::Rc;
 
-pub struct Lox<W: Write> {
+pub struct Lox {
     pub has_error: bool,
     pub has_runtime_error: bool,
-    out: W,
+    out: Rc<RefCell<dyn Write>>,
 }
 
-impl Lox<io::Stdout> {
+impl Lox {
     pub fn new() -> Self {
+        Lox::new_t(Rc::new(RefCell::new(io::stdout())))
+    }
+
+    pub fn new_t(out: Rc<RefCell<dyn Write>>) -> Self {
         Self {
             has_error: false,
             has_runtime_error: false,
-            out: io::stdout(),
+            out,
         }
     }
 }
 
-impl Lox<Vec<u8>> {
-    pub fn new() -> Self {
-        Self {
-            has_error: false,
-            has_runtime_error: false,
-            out: vec![],
-        }
-    }
-
-    pub fn output(&self) -> String {
-        String::from_utf8(self.out.clone()).unwrap()
-    }
-}
-
-impl<W: Write> Lox<W> {
+impl Lox {
     fn run(&mut self, env: EnvRef, source: &str) {
         let mut scanner = Scanner::new(source);
         let tokens = scanner.scan_tokens(self);
@@ -76,7 +68,7 @@ impl<W: Write> Lox<W> {
         let env = Environment::new();
         loop {
             self.print("> ")?;
-            self.out.flush()?;
+            self.out.borrow_mut().flush()?;
 
             let mut input = String::new();
             io::stdin().read_line(&mut input)?;
@@ -87,11 +79,14 @@ impl<W: Write> Lox<W> {
     }
 
     pub fn print(&mut self, message: &str) -> io::Result<()> {
-        self.out.write_fmt(format_args!("{}", message))
+        self.out.borrow_mut().write_fmt(format_args!("{}", message))
     }
 
     pub fn println(&mut self, message: &str) {
-        self.out.write_fmt(format_args!("{}\n", message)).unwrap()
+        self.out
+            .borrow_mut()
+            .write_fmt(format_args!("{}\n", message))
+            .unwrap()
     }
 
     pub fn runtime_error(&mut self, e: RuntimeException) {

@@ -3,21 +3,20 @@ use crate::ast::Stmt;
 use crate::lox::Lox;
 use crate::token::Token;
 use crate::token::TokenType;
-use std::io::Write;
 
 const MAX_ARGS: usize = 255;
 
 #[derive(Debug)]
 struct ParserError {}
 
-pub struct Parser<'a, W: Write> {
+pub struct Parser<'a> {
     tokens: Vec<Token>,
     current: usize,
-    lox: &'a mut Lox<W>,
+    lox: &'a mut Lox,
 }
 
-impl<'a, W: Write> Parser<'a, W> {
-    pub fn new(lox: &'a mut Lox<W>, tokens: Vec<Token>) -> Self {
+impl<'a> Parser<'a> {
+    pub fn new(lox: &'a mut Lox, tokens: Vec<Token>) -> Self {
         Self {
             tokens,
             current: 0,
@@ -486,10 +485,13 @@ impl<'a, W: Write> Parser<'a, W> {
 #[cfg(test)]
 mod spec {
     use super::*;
+    use std::cell::RefCell;
+    use std::rc::Rc;
 
     fn parse<'a>(source: &'a str) -> Vec<String> {
         use crate::scanner::Scanner;
-        let mut lox = Lox::<Vec<u8>>::new();
+        let out = Rc::new(RefCell::new(vec![]));
+        let mut lox = Lox::new_t(out.clone());
         let mut scanner = Scanner::new(source);
         let tokens = scanner.scan_tokens(&mut lox);
 
@@ -500,8 +502,9 @@ mod spec {
             .map(|p| p.to_string())
             .collect::<Vec<_>>();
 
-        let mut output = lox
-            .output()
+        let v = out.borrow().to_vec();
+        let mut output = std::string::String::from_utf8(v)
+            .unwrap()
             .lines()
             .map(|s| s.to_string())
             .collect::<Vec<_>>();

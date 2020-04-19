@@ -7,7 +7,6 @@ use crate::token::{self, Literal::*, Token, TokenType as t};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt;
-use std::io::Write;
 use std::rc::Rc;
 use std::result::Result::{Err, Ok};
 use std::time::Instant;
@@ -15,13 +14,13 @@ use Value::*;
 
 pub type Result<T> = std::result::Result<T, RuntimeException>;
 
-pub struct Interpreter<'a, W: Write> {
-    lox: &'a mut Lox<W>,
+pub struct Interpreter<'a> {
+    lox: &'a mut Lox,
     locals: &'a HashMap<Expr, usize>,
 }
 
-impl<'a, W: Write> Interpreter<'a, W> {
-    pub fn new(lox: &'a mut Lox<W>, locals: &'a HashMap<Expr, usize>) -> Self {
+impl<'a> Interpreter<'a> {
+    pub fn new(lox: &'a mut Lox, locals: &'a HashMap<Expr, usize>) -> Self {
         Self { lox, locals }
     }
 
@@ -506,20 +505,24 @@ mod spec {
     use crate::scanner::Scanner;
 
     fn run<'a>(source: &'a str) -> std::string::String {
-        let mut lox = Lox::<Vec<u8>>::new();
+        let out = Rc::new(RefCell::new(vec![]));
+        let mut lox = Lox::new_t(out.clone());
         let mut scanner = Scanner::new(source);
         let tokens = scanner.scan_tokens(&mut lox);
         let mut parser = Parser::new(&mut lox, tokens);
         let statements = parser.parse();
         if lox.has_error {
-            return lox.output();
+            let v = out.borrow().to_vec();
+            return std::string::String::from_utf8(v).unwrap();
         }
         let locals = Resolver::new(&mut lox).resolve(&statements).locals;
         if lox.has_error {
-            return lox.output();
+            let v = out.borrow().to_vec();
+            return std::string::String::from_utf8(v).unwrap();
         }
         Interpreter::new(&mut lox, &locals).interpret(Environment::new(), statements);
-        lox.output()
+        let v = out.borrow().to_vec();
+        return std::string::String::from_utf8(v).unwrap();
     }
 
     #[test]

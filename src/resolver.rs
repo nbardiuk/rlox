@@ -3,14 +3,13 @@ use crate::ast::Stmt::{self, *};
 use crate::lox::Lox;
 use crate::token::Token;
 use std::collections::HashMap;
-use std::io::Write;
 
-pub struct Resolver<'a, W: Write> {
+pub struct Resolver<'a> {
     scopes: Vec<HashMap<String, bool>>,
     pub locals: HashMap<Expr, usize>,
     function: FunctionType,
     class: ClassType,
-    lox: &'a mut Lox<W>,
+    lox: &'a mut Lox,
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -28,8 +27,8 @@ enum ClassType {
     Subclass,
 }
 
-impl<'a, W: Write> Resolver<'a, W> {
-    pub fn new(lox: &'a mut Lox<W>) -> Self {
+impl<'a> Resolver<'a> {
+    pub fn new(lox: &'a mut Lox) -> Self {
         Self {
             scopes: vec![],
             locals: HashMap::default(),
