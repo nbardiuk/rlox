@@ -3,15 +3,26 @@ use std::fmt::{Display, Error, Formatter};
 use std::hash::{Hash, Hasher};
 use std::result::Result;
 
-#[derive(Clone, Debug, PartialEq, Hash, Eq)]
+#[derive(Clone, Debug)]
 pub struct Token {
-    pub typ: TokenType,
+    column: usize,
     pub lexeme: String,
-    pub literal: Literal,
     pub line: usize,
-    pub column: usize,
+    pub literal: Literal,
+    pub typ: TokenType,
 }
-
+impl Eq for Token {}
+impl PartialEq for Token {
+    fn eq(&self, r: &Self) -> bool {
+        self.column == r.column && self.line == r.line
+    }
+}
+impl Hash for Token {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.column.hash(state);
+        self.line.hash(state);
+    }
+}
 impl Token {
     pub fn new(typ: TokenType, lexeme: &str, literal: Literal, line: usize, column: usize) -> Self {
         Self {
@@ -24,49 +35,12 @@ impl Token {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Literal {
     Bool(bool),
     Nil,
     Number(f64),
     String(String),
-}
-impl Eq for Literal {}
-impl PartialEq for Literal {
-    fn eq(&self, r: &Self) -> bool {
-        use Literal::*;
-        match (self, r) {
-            (Number(a), Number(b)) => {
-                ((a * 10000.).round() as u64) == ((b * 10000.).round() as u64)
-            }
-            (Bool(a), Bool(b)) => a == b,
-            (Nil, Nil) => true,
-            (String(a), String(b)) => a == b,
-            _ => false,
-        }
-    }
-}
-impl Hash for Literal {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        use Literal::*;
-        match self {
-            Bool(b) => {
-                0.hash(state);
-                b.hash(state);
-            }
-            Nil => {
-                1.hash(state);
-            }
-            Number(f) => {
-                2.hash(state);
-                ((f * 10000.).round() as u64).hash(state);
-            }
-            String(s) => {
-                3.hash(state);
-                s.hash(state);
-            }
-        }
-    }
 }
 
 impl Display for Literal {
