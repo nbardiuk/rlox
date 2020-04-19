@@ -17,41 +17,44 @@ pub type Result<T> = std::result::Result<T, RuntimeException>;
 pub struct Interpreter<'a> {
     lox: &'a mut Lox,
     locals: &'a HashMap<Expr, usize>,
+    env: EnvRef,
 }
 
 impl<'a> Interpreter<'a> {
-    pub fn new(lox: &'a mut Lox, locals: &'a HashMap<Expr, usize>) -> Self {
-        Self { lox, locals }
-    }
-
-    pub fn interpret(&mut self, env: EnvRef, statements: Vec<Stmt>) {
+    pub fn new(lox: &'a mut Lox, locals: &'a HashMap<Expr, usize>, env: EnvRef) -> Self {
         let global = Environment::global(env.clone());
         global
             .borrow_mut()
             .define("clock", F(Rc::new(Clock::new())));
+        Self { lox, locals, env }
+    }
+
+    pub fn interpret(&mut self, statements: Vec<Stmt>) {
         for stmt in statements {
-            if let Err(e) = self.execute(env.clone(), &stmt) {
+            if let Err(e) = self.execute(&stmt) {
                 self.lox.runtime_error(e);
                 break;
             }
         }
     }
 
-    fn execute_block(&mut self, env: EnvRef, statements: &[Stmt]) -> Result<()> {
-        statements
-            .iter()
-            .try_for_each(|s| self.execute(env.clone(), s))
+    fn execute_block(&mut self, statements: &[Stmt]) -> Result<()> {
+        statements.iter().try_for_each(|s| self.execute(s))
     }
 
-    fn execute(&mut self, env: EnvRef, stmt: &Stmt) -> Result<()> {
+    fn execute(&mut self, stmt: &Stmt) -> Result<()> {
         match stmt {
             Block(statements) => {
-                self.execute_block(Environment::nested(env), &statements)?;
+                let env = Environment::nested(self.env.clone());
+                let old_env = self.env.clone();
+                self.env = env;
+                self.execute_block(&statements)?;
+                self.env = old_env;
             }
             Class(name, superclass, methods) => {
                 let superclass = if let Some(Variable(n)) = superclass {
                     //FIXME we know it is always a variable but the info is lost
-                    if let C(s) = self.evaluate(env.clone(), &Variable(n.clone()))? {
+                    if let C(s) = self.evaluate(&Variable(n.clone()))? {
                         Some(s)
                     } else {
                         return err(n, "Superclass must be a class.");
@@ -60,14 +63,14 @@ impl<'a> Interpreter<'a> {
                     None
                 };
 
-                env.borrow_mut().define(&name.lexeme, V(Nil));
+                self.env.borrow_mut().define(&name.lexeme, V(Nil));
 
                 let env = if let Some(s) = &superclass {
-                    let e = Environment::nested(env);
+                    let e = Environment::nested(self.env.clone());
                     e.borrow_mut().define("super", C(s.clone()));
                     e
                 } else {
-                    env
+                    self.env.clone()
                 };
 
                 let superclass = superclass.map(Rc::new);
@@ -104,68 +107,66 @@ impl<'a> Interpreter<'a> {
                 )?;
             }
             Expression(expression) => {
-                self.evaluate(env, &expression).map(|_| ())?;
+                self.evaluate(&expression).map(|_| ())?;
             }
-            Function(name, params, body) => env.borrow_mut().define(
+            Function(name, params, body) => self.env.borrow_mut().define(
                 &name.lexeme,
                 F(Rc::new(Function {
                     name: name.clone(),
                     params: params.clone(),
                     body: body.to_vec(),
-                    closure: env.clone(),
+                    closure: self.env.clone(),
                     is_initializer: false,
                 })),
             ),
             If(condition, then, r#else) => {
-                if is_truthy(&self.evaluate(env.clone(), &condition)?) {
-                    self.execute(env, &then)?;
+                if is_truthy(&self.evaluate(&condition)?) {
+                    self.execute(&then)?;
                 } else if let Some(els) = r#else {
-                    self.execute(env, &els)?;
+                    self.execute(&els)?;
                 }
             }
             Print(expression) => {
-                let val = self.evaluate(env, &expression)?;
+                let val = self.evaluate(&expression)?;
                 self.lox.println(&val.to_string());
             }
             Return(_keyword, value) => {
                 let value = match value {
-                    Some(value) => self.evaluate(env, value)?,
+                    Some(value) => self.evaluate(value)?,
                     None => V(Nil),
                 };
                 return Err(RuntimeException::Return(value));
             }
             Var(name, initializer) => match initializer {
                 Some(i) => {
-                    let value = self.evaluate(env.clone(), &i)?;
-                    env.borrow_mut().define(&name.lexeme, value)
+                    let value = self.evaluate(&i)?;
+                    self.env.borrow_mut().define(&name.lexeme, value)
                 }
-                _ => env.borrow_mut().define(&name.lexeme, V(Nil)),
+                _ => self.env.borrow_mut().define(&name.lexeme, V(Nil)),
             },
             While(condition, body) => {
-                while is_truthy(&self.evaluate(env.clone(), &condition)?) {
-                    self.execute(env.clone(), &body)?
+                while is_truthy(&self.evaluate(&condition)?) {
+                    self.execute(&body)?
                 }
             }
         }
         Ok(())
     }
 
-    fn evaluate(&mut self, env: EnvRef, expr: &Expr) -> Result<Value> {
+    fn evaluate(&mut self, expr: &Expr) -> Result<Value> {
         match expr {
             Asign(name, value) => {
-                let value = self.evaluate(env.clone(), value)?;
+                let value = self.evaluate(value)?;
                 if let Some(distance) = self.locals.get(expr) {
-                    Environment::assign_at(env, *distance, name, value)
+                    Environment::assign_at(self.env.clone(), *distance, name, value)
                 } else {
-                    Environment::global(env).borrow_mut().assign(name, value)
+                    Environment::global(self.env.clone())
+                        .borrow_mut()
+                        .assign(name, value)
                 }
             }
             Binary(left, op, right) => {
-                match (
-                    op.typ,
-                    self.evaluate(env.clone(), left)?,
-                    self.evaluate(env, right)?,
-                ) {
+                match (op.typ, self.evaluate(left)?, self.evaluate(right)?) {
                     (t::BangEqual, V(a), V(b)) => Ok(V(Bool(a != b))),
                     (t::EqualEqual, V(a), V(b)) => Ok(V(Bool(a == b))),
                     (t::Greater, V(Number(a)), V(Number(b))) => Ok(V(Bool(a > b))),
@@ -181,36 +182,36 @@ impl<'a> Interpreter<'a> {
                     _ => err(op, "Operands must be numbers"),
                 }
             }
-            Call(callee, paren, args) => match self.evaluate(env.clone(), callee)? {
-                C(callee) => self.call(env, Rc::new(callee), args, paren),
-                F(callee) => self.call(env, callee, args, paren),
+            Call(callee, paren, args) => match self.evaluate(callee)? {
+                C(callee) => self.call(Rc::new(callee), args, paren),
+                F(callee) => self.call(callee, args, paren),
                 _ => err(paren, "Can only call functions and classes."),
             },
             Get(object, name) => {
-                if let I(i) = self.evaluate(env, &object)? {
+                if let I(i) = self.evaluate(&object)? {
                     i.get(name)
                 } else {
                     err(&name, "Only instances have properties.")
                 }
             }
-            Grouping(expression) => self.evaluate(env, &expression),
+            Grouping(expression) => self.evaluate(&expression),
             Literal(value) => Ok(V(value.clone())),
             Logical(left, op, right) => {
-                let left = self.evaluate(env.clone(), left)?;
+                let left = self.evaluate(left)?;
                 match (op.typ, is_truthy(&left)) {
                     (t::And, false) => Ok(left),
                     (t::Or, true) => Ok(left),
-                    _ => self.evaluate(env, right),
+                    _ => self.evaluate(right),
                 }
             }
-            Unary(op, right) => match (op.typ, self.evaluate(env, right)?) {
+            Unary(op, right) => match (op.typ, self.evaluate(right)?) {
                 (t::Bang, r) => Ok(V(Bool(!is_truthy(&r)))),
                 (t::Minus, V(Number(d))) => Ok(V(Number(-d))),
                 _ => err(op, "Operand must be a number"),
             },
             Set(object, name, value) => {
-                if let I(i) = self.evaluate(env.clone(), &object)? {
-                    let v = self.evaluate(env, &value)?;
+                if let I(i) = self.evaluate(&object)? {
+                    let v = self.evaluate(&value)?;
                     i.set(name, v.clone());
                     Ok(v)
                 } else {
@@ -219,10 +220,14 @@ impl<'a> Interpreter<'a> {
             }
             Super(keyword, method) => {
                 if let Some(distance) = self.locals.get(expr) {
-                    if let C(superclass) = Environment::get_at(env.clone(), *distance, keyword)? {
+                    if let C(superclass) =
+                        Environment::get_at(self.env.clone(), *distance, keyword)?
+                    {
                         let mut this = keyword.clone();
                         this.lexeme = "this".to_string();
-                        if let I(object) = Environment::get_at(env, *distance - 1, &this)? {
+                        if let I(object) =
+                            Environment::get_at(self.env.clone(), *distance - 1, &this)?
+                        {
                             return if let Some(method) = superclass.find_method(&method.lexeme) {
                                 Ok(F(Rc::new(method.bind(object))))
                             } else {
@@ -233,26 +238,20 @@ impl<'a> Interpreter<'a> {
                 }
                 err(&keyword, "Should be a resolver error")
             }
-            This(keyword) => self.lookup_variable(env, keyword, expr),
-            Variable(name) => self.lookup_variable(env, name, expr),
+            This(keyword) => self.lookup_variable(keyword, expr),
+            Variable(name) => self.lookup_variable(name, expr),
         }
     }
 
-    fn lookup_variable(&self, env: EnvRef, name: &Token, expr: &Expr) -> Result<Value> {
+    fn lookup_variable(&self, name: &Token, expr: &Expr) -> Result<Value> {
         if let Some(distance) = self.locals.get(expr) {
-            Environment::get_at(env, *distance, name)
+            Environment::get_at(self.env.clone(), *distance, name)
         } else {
-            Environment::global(env).borrow().get(name)
+            Environment::global(self.env.clone()).borrow().get(name)
         }
     }
 
-    fn call(
-        &mut self,
-        env: EnvRef,
-        callee: Rc<dyn Callable>,
-        args: &[Expr],
-        paren: &Token,
-    ) -> Result<Value> {
+    fn call(&mut self, callee: Rc<dyn Callable>, args: &[Expr], paren: &Token) -> Result<Value> {
         if args.len() != callee.arity() {
             let message = format!(
                 "Expected {} arguments but got {}.",
@@ -263,7 +262,7 @@ impl<'a> Interpreter<'a> {
         } else {
             let mut ars = vec![];
             for arg in args {
-                ars.push(self.evaluate(env.clone(), arg)?);
+                ars.push(self.evaluate(arg)?);
             }
             callee.call(self, paren, &ars)
         }
@@ -356,11 +355,18 @@ impl fmt::Display for Function {
 impl Callable for Function {
     fn call(&self, interpreter: &mut Interpreter, _: &Token, args: &[Value]) -> Result<Value> {
         let env = Environment::nested(self.closure.clone());
+        let old_env = interpreter.env.clone();
+        interpreter.env = env;
 
         let defs = self.params.iter().zip(args.iter());
-        defs.for_each(|(param, arg)| env.borrow_mut().define(&param.lexeme, arg.clone()));
+        defs.for_each(|(param, arg)| {
+            interpreter
+                .env
+                .borrow_mut()
+                .define(&param.lexeme, arg.clone())
+        });
 
-        match interpreter.execute_block(env, &self.body) {
+        let r = match interpreter.execute_block(&self.body) {
             Err(RuntimeException::Return(v)) => {
                 if self.is_initializer {
                     self.this()
@@ -376,7 +382,10 @@ impl Callable for Function {
                 }
             }
             Err(e) => Err(e),
-        }
+        };
+
+        interpreter.env = old_env;
+        r
     }
 
     fn arity(&self) -> usize {
@@ -499,7 +508,7 @@ mod spec {
             let v = out.borrow().to_vec();
             return std::string::String::from_utf8(v).unwrap();
         }
-        Interpreter::new(&mut lox, &locals).interpret(Environment::new(), statements);
+        Interpreter::new(&mut lox, &locals, Environment::new()).interpret(statements);
         let v = out.borrow().to_vec();
         return std::string::String::from_utf8(v).unwrap();
     }

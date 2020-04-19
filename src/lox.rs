@@ -49,7 +49,7 @@ impl Lox {
 
         let locals = Resolver::new(self).resolve(&statements).locals;
 
-        Interpreter::new(self, &locals).interpret(env, statements);
+        Interpreter::new(self, &locals, env).interpret(statements);
     }
 
     pub fn run_file(&mut self, path: &str) -> io::Result<()> {
