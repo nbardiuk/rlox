@@ -53,14 +53,26 @@ impl<'a, W: Write> Interpreter<'a, W> {
                 let superclass = if let Some(Variable(n)) = superclass {
                     //FIXME we know it is always a variable but the info is lost
                     if let C(s) = self.evaluate(env.clone(), &Variable(n.clone()))? {
-                        Some(Rc::new(s))
+                        Some(s)
                     } else {
                         return err(n, "Superclass must be a class.");
                     }
                 } else {
                     None
                 };
+
                 env.borrow_mut().define(&name.lexeme, V(Nil));
+
+                let env = if let Some(s) = &superclass {
+                    let e = Environment::nested(env);
+                    e.borrow_mut().define("super", C(s.clone()));
+                    e
+                } else {
+                    env
+                };
+
+                let superclass = superclass.map(Rc::new);
+
                 let mut ms = HashMap::default();
                 for method in methods {
                     if let Function(name, params, body) = method {
@@ -76,6 +88,12 @@ impl<'a, W: Write> Interpreter<'a, W> {
                         );
                     }
                 }
+
+                let env = if superclass.is_some() {
+                    Environment::unnested(env)
+                } else {
+                    env
+                };
 
                 env.borrow_mut().assign(
                     name,
@@ -200,7 +218,22 @@ impl<'a, W: Write> Interpreter<'a, W> {
                     err(&name, "Only instances have fields.")
                 }
             }
-            Super(_keyword, _method) => Ok(V(Nil)),
+            Super(keyword, method) => {
+                if let Some(distance) = self.locals.get(expr) {
+                    if let C(superclass) = Environment::get_at(env.clone(), *distance, keyword)? {
+                        let mut this = keyword.clone();
+                        this.lexeme = "this".to_string();
+                        if let I(object) = Environment::get_at(env, *distance - 1, &this)? {
+                            return if let Some(method) = superclass.find_method(&method.lexeme) {
+                                Ok(F(Rc::new(method.bind(object))))
+                            } else {
+                                err(&method, &format!("Undefined property '{}'.", method.lexeme))
+                            };
+                        }
+                    }
+                }
+                err(&keyword, "Should be a resolver error")
+            }
             This(keyword) => self.lookup_variable(env, keyword, expr),
             Variable(name) => self.lookup_variable(env, name, expr),
         }
@@ -1212,6 +1245,22 @@ mod spec {
                  class BostonCream < Doughnut {}
                  BostonCream().cook();"),
             "\"Fry until golden brown.\"\n"
+        );
+    }
+
+    #[test]
+    fn super_() {
+        assert_eq!(
+            run("class A {
+                   method() { print \"A method\"; }
+                 }
+                 class B < A {
+                   method() { print \"B method\"; }
+                   test() { super.method(); }
+                 }
+                 class C < B {}
+                 C().test();"),
+            "\"A method\"\n"
         );
     }
 }

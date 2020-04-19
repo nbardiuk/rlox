@@ -35,6 +35,14 @@ impl Environment {
         }))
     }
 
+    pub fn unnested(e: EnvRef) -> EnvRef {
+        if let Some(e) = e.borrow().enclosing.clone() {
+            e
+        } else {
+            e.clone()
+        }
+    }
+
     pub fn define(&mut self, var: &str, value: Value) {
         self.values.insert(var.to_string(), value);
     }

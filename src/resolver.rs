@@ -67,7 +67,8 @@ impl<'a, W: Write> Resolver<'a, W> {
                     self.declare(name);
                     self.define(name);
 
-                    if let Some(Variable(sup)) = superclass { // FIXME we know it always variable but info is lost
+                    if let Some(Variable(sup)) = superclass {
+                        // FIXME we know it always variable but info is lost
                         if name.lexeme == sup.lexeme {
                             self.lox
                                 .error_token(sup, "A class cannot inherit from itself.");
@@ -75,21 +76,31 @@ impl<'a, W: Write> Resolver<'a, W> {
                         self.resolve_expr(&Variable(sup.clone()));
                     }
 
-                    self.begin_scope();
+                    if superclass.is_some() {
+                        self.begin_scope();
+                        self.define_s("super");
+                    }
                     {
-                        self.define_s("this");
-                        for method in methods {
-                            if let Function(name, params, body) = method { // FIXME we know it always function but info is lost
-                                let declaration = if name.lexeme == "init" {
-                                    FunctionType::Initializer
-                                } else {
-                                    FunctionType::Method
-                                };
-                                self.resolve_function(params, body, declaration)
+                        self.begin_scope();
+                        {
+                            self.define_s("this");
+                            for method in methods {
+                                if let Function(name, params, body) = method {
+                                    // FIXME we know it always function but info is lost
+                                    let declaration = if name.lexeme == "init" {
+                                        FunctionType::Initializer
+                                    } else {
+                                        FunctionType::Method
+                                    };
+                                    self.resolve_function(params, body, declaration)
+                                }
                             }
                         }
+                        self.end_scope();
                     }
-                    self.end_scope();
+                    if superclass.is_some() {
+                        self.end_scope();
+                    }
                 }
                 self.class = enclosing_class;
             }
@@ -180,7 +191,9 @@ impl<'a, W: Write> Resolver<'a, W> {
                 self.resolve_expr(value);
                 self.resolve_expr(object);
             }
-            Super(_keyword, _method) => {},
+            Super(keyword, _method) => {
+                self.resolve_local(keyword, expr);
+            }
             This(keyword) => {
                 if self.class == ClassType::None {
                     self.lox
