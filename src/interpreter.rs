@@ -200,6 +200,7 @@ impl<'a, W: Write> Interpreter<'a, W> {
                     err(&name, "Only instances have fields.")
                 }
             }
+            Super(_keyword, _method) => Ok(V(Nil)),
             This(keyword) => self.lookup_variable(env, keyword, expr),
             Variable(name) => self.lookup_variable(env, name, expr),
         }

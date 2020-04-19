@@ -408,6 +408,12 @@ impl<'a, W: Write> Parser<'a, W> {
             self.consume(RightParen, "Expect ')' after expression.")?;
             return Ok(Expr::Grouping(Rc::new(expr)));
         }
+        if self.matches(&[Super]) {
+            let keyword = self.previous();
+            self.consume(Dot, "Expect '.' after 'super'.")?;
+            let method = self.consume(Identifier, "Expect superclass method name.")?;
+            return Ok(Expr::Super(keyword, method));
+        }
         if self.matches(&[This]) {
             return Ok(Expr::This(self.previous()));
         }
@@ -1174,6 +1180,19 @@ mod spec {
         assert_eq!(
             parse("var this = 1;"),
             vec!["[line 1] Error at 'this': Expect variable name."]
+        );
+    }
+
+    #[test]
+    fn super_() {
+        assert_eq!(parse("super.b(c);"), vec!["(expr ((get super :b) c))"]);
+        assert_eq!(
+            parse("print super;"),
+            vec!["[line 1] Error at ';': Expect '.' after 'super'."]
+        );
+        assert_eq!(
+            parse("super.2;"),
+            vec!["[line 1] Error at '2': Expect superclass method name.",]
         );
     }
 }

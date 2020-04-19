@@ -180,6 +180,7 @@ impl<'a, W: Write> Resolver<'a, W> {
                 self.resolve_expr(value);
                 self.resolve_expr(object);
             }
+            Super(_keyword, _method) => {},
             This(keyword) => {
                 if self.class == ClassType::None {
                     self.lox
