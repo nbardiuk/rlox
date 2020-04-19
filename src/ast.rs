@@ -1,32 +1,31 @@
 use crate::token::{Literal, Token};
 use std::fmt::{Display, Error, Formatter};
-use std::rc::Rc;
 use std::result::Result;
 
 #[derive(Clone)]
 pub enum Stmt {
     Block(Vec<Stmt>),
     Class(Token, Option<Expr>, Vec<Stmt>),
-    Expression(Rc<Expr>),
+    Expression(Expr),
     Function(Token, Vec<Token>, Vec<Stmt>),
-    If(Rc<Expr>, Rc<Stmt>, Option<Rc<Stmt>>),
-    Print(Rc<Expr>),
-    Return(Token, Option<Rc<Expr>>),
-    Var(Token, Option<Rc<Expr>>),
-    While(Rc<Expr>, Rc<Stmt>),
+    If(Expr, Box<Stmt>, Option<Box<Stmt>>),
+    Print(Expr),
+    Return(Token, Option<Expr>),
+    Var(Token, Option<Expr>),
+    While(Expr, Box<Stmt>),
 }
 
 #[derive(Clone, Hash, Eq, PartialEq)]
 pub enum Expr {
-    Asign(Token, Rc<Expr>),
-    Binary(Rc<Expr>, Token, Rc<Expr>),
-    Call(Rc<Expr>, Token, Vec<Expr>),
-    Get(Rc<Expr>, Token),
-    Grouping(Rc<Expr>),
+    Asign(Token, Box<Expr>),
+    Binary(Box<Expr>, Token, Box<Expr>),
+    Call(Box<Expr>, Token, Vec<Expr>),
+    Get(Box<Expr>, Token),
+    Grouping(Box<Expr>),
     Literal(Literal),
-    Logical(Rc<Expr>, Token, Rc<Expr>),
-    Unary(Token, Rc<Expr>),
-    Set(Rc<Expr>, Token, Rc<Expr>),
+    Logical(Box<Expr>, Token, Box<Expr>),
+    Unary(Token, Box<Expr>),
+    Set(Box<Expr>, Token, Box<Expr>),
     Super(Token, Token),
     This(Token),
     Variable(Token),
@@ -44,13 +43,9 @@ impl Display for Stmt {
         match self {
             Block(statemets) => write!(f, "(do {})", join(statemets, " ")),
             Class(name, None, methods) => write!(f, "(class {} {})", name, join(methods, " ")),
-            Class(name, Some(superclass), methods) => write!(
-                f,
-                "(class {} {} {})",
-                name,
-                superclass,
-                join(methods, " ")
-            ),
+            Class(name, Some(superclass), methods) => {
+                write!(f, "(class {} {} {})", name, superclass, join(methods, " "))
+            }
             Expression(expr) => write!(f, "(expr {})", expr),
             Function(name, params, body) => write!(
                 f,

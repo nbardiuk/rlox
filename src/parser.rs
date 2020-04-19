@@ -4,7 +4,6 @@ use crate::lox::Lox;
 use crate::token::Token;
 use crate::token::TokenType;
 use std::io::Write;
-use std::rc::Rc;
 
 const MAX_ARGS: usize = 255;
 
@@ -111,7 +110,7 @@ impl<'a, W: Write> Parser<'a, W> {
         let name = self.consume(Identifier, "Expect variable name.")?;
 
         let initializer = if self.matches(&[Equal]) {
-            Some(Rc::new(self.expression()?))
+            Some(self.expression()?)
         } else {
             None
         };
@@ -144,13 +143,13 @@ impl<'a, W: Write> Parser<'a, W> {
         use TokenType::*;
 
         self.consume(LeftParen, "Expect '(' after if.")?;
-        let condition = Rc::new(self.expression()?);
+        let condition = self.expression()?;
         self.consume(RightParen, "Expect ')' after condition.")?;
 
-        let then = Rc::new(self.statement()?);
+        let then = Box::new(self.statement()?);
 
         let r#else = if self.matches(&[Else]) {
-            Some(Rc::new(self.statement()?))
+            Some(Box::new(self.statement()?))
         } else {
             None
         };
@@ -179,7 +178,7 @@ impl<'a, W: Write> Parser<'a, W> {
         self.consume(Semicolon, "Expect ';' after loop condition.")?;
 
         let increment = if !self.check(RightParen) {
-            Some(Rc::new(self.expression()?))
+            Some(self.expression()?)
         } else {
             None
         };
@@ -189,7 +188,7 @@ impl<'a, W: Write> Parser<'a, W> {
         if let Some(inc) = increment {
             body = Stmt::Block(vec![body, Stmt::Expression(inc)]);
         }
-        body = Stmt::While(Rc::new(condition), Rc::new(body));
+        body = Stmt::While(condition, Box::new(body));
         if let Some(init) = initializer {
             body = Stmt::Block(vec![init, body]);
         }
@@ -201,10 +200,10 @@ impl<'a, W: Write> Parser<'a, W> {
         use TokenType::*;
 
         self.consume(LeftParen, "Expect '(' after while.")?;
-        let condition = Rc::new(self.expression()?);
+        let condition = self.expression()?;
         self.consume(RightParen, "Expect ')' after condition.")?;
 
-        let body = Rc::new(self.statement()?);
+        let body = Box::new(self.statement()?);
 
         Ok(Stmt::While(condition, body))
     }
@@ -228,14 +227,14 @@ impl<'a, W: Write> Parser<'a, W> {
         use TokenType::*;
         let value = self.expression()?;
         self.consume(Semicolon, "Expect ';' after value.")?;
-        Ok(Stmt::Print(Rc::new(value)))
+        Ok(Stmt::Print(value))
     }
 
     fn return_statement(&mut self) -> Result<Stmt, ParserError> {
         use TokenType::*;
         let keyword = self.previous();
         let value = if !self.check(Semicolon) {
-            Some(Rc::new(self.expression()?))
+            Some(self.expression()?)
         } else {
             None
         };
@@ -247,7 +246,7 @@ impl<'a, W: Write> Parser<'a, W> {
         use TokenType::*;
         let value = self.expression()?;
         self.consume(Semicolon, "Expect ';' after value.")?;
-        Ok(Stmt::Expression(Rc::new(value)))
+        Ok(Stmt::Expression(value))
     }
 
     fn expression(&mut self) -> Result<Expr, ParserError> {
@@ -260,9 +259,9 @@ impl<'a, W: Write> Parser<'a, W> {
 
         if self.matches(&[Equal]) {
             if let Expr::Variable(name) = expr {
-                Ok(Expr::Asign(name, Rc::new(self.assignment()?)))
+                Ok(Expr::Asign(name, Box::new(self.assignment()?)))
             } else if let Expr::Get(object, name) = expr {
-                Ok(Expr::Set(object, name, Rc::new(self.assignment()?)))
+                Ok(Expr::Set(object, name, Box::new(self.assignment()?)))
             } else {
                 self.error(self.previous(), "Invalid assignment target.")
             }
@@ -278,7 +277,7 @@ impl<'a, W: Write> Parser<'a, W> {
         while self.matches(&[Or]) {
             let operator = self.previous();
             let right = self.and()?;
-            expr = Expr::Logical(Rc::new(expr), operator, Rc::new(right));
+            expr = Expr::Logical(Box::new(expr), operator, Box::new(right));
         }
 
         Ok(expr)
@@ -291,7 +290,7 @@ impl<'a, W: Write> Parser<'a, W> {
         while self.matches(&[And]) {
             let operator = self.previous();
             let right = self.equality()?;
-            expr = Expr::Logical(Rc::new(expr), operator, Rc::new(right));
+            expr = Expr::Logical(Box::new(expr), operator, Box::new(right));
         }
 
         Ok(expr)
@@ -304,7 +303,7 @@ impl<'a, W: Write> Parser<'a, W> {
         while self.matches(&[BangEqual, EqualEqual]) {
             let operator = self.previous();
             let right = self.comparison()?;
-            expr = Expr::Binary(Rc::new(expr), operator, Rc::new(right));
+            expr = Expr::Binary(Box::new(expr), operator, Box::new(right));
         }
 
         Ok(expr)
@@ -317,7 +316,7 @@ impl<'a, W: Write> Parser<'a, W> {
         while self.matches(&[Greater, GreaterEqual, Less, LessEqual]) {
             let operator = self.previous();
             let right = self.addition()?;
-            expr = Expr::Binary(Rc::new(expr), operator, Rc::new(right));
+            expr = Expr::Binary(Box::new(expr), operator, Box::new(right));
         }
 
         Ok(expr)
@@ -330,7 +329,7 @@ impl<'a, W: Write> Parser<'a, W> {
         while self.matches(&[Minus, Plus]) {
             let operator = self.previous();
             let right = self.multiplication()?;
-            expr = Expr::Binary(Rc::new(expr), operator, Rc::new(right));
+            expr = Expr::Binary(Box::new(expr), operator, Box::new(right));
         }
 
         Ok(expr)
@@ -343,7 +342,7 @@ impl<'a, W: Write> Parser<'a, W> {
         while self.matches(&[Slash, Star]) {
             let operator = self.previous();
             let right = self.unary()?;
-            expr = Expr::Binary(Rc::new(expr), operator, Rc::new(right));
+            expr = Expr::Binary(Box::new(expr), operator, Box::new(right));
         }
 
         Ok(expr)
@@ -354,7 +353,7 @@ impl<'a, W: Write> Parser<'a, W> {
         if self.matches(&[Bang, Minus]) {
             let operator = self.previous();
             let right = self.unary()?;
-            return Ok(Expr::Unary(operator, Rc::new(right)));
+            return Ok(Expr::Unary(operator, Box::new(right)));
         }
         self.call()
     }
@@ -368,7 +367,7 @@ impl<'a, W: Write> Parser<'a, W> {
                 expr = self.finish_call(expr)?;
             } else if self.matches(&[Dot]) {
                 let name = self.consume(Identifier, "Expect property name after '.'.")?;
-                expr = Expr::Get(Rc::new(expr), name);
+                expr = Expr::Get(Box::new(expr), name);
             } else {
                 break;
             }
@@ -395,7 +394,7 @@ impl<'a, W: Write> Parser<'a, W> {
             }
         }
         let paren = self.consume(RightParen, "Expect ')' after arguments.")?;
-        Ok(Expr::Call(Rc::new(callee), paren, args))
+        Ok(Expr::Call(Box::new(callee), paren, args))
     }
 
     fn primary(&mut self) -> Result<Expr, ParserError> {
@@ -406,7 +405,7 @@ impl<'a, W: Write> Parser<'a, W> {
         if self.matches(&[LeftParen]) {
             let expr = self.expression()?;
             self.consume(RightParen, "Expect ')' after expression.")?;
-            return Ok(Expr::Grouping(Rc::new(expr)));
+            return Ok(Expr::Grouping(Box::new(expr)));
         }
         if self.matches(&[Super]) {
             let keyword = self.previous();
