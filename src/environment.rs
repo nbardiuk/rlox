@@ -21,13 +21,6 @@ impl Environment {
         }))
     }
 
-    pub fn global(env: EnvRef) -> EnvRef {
-        match &env.clone().borrow().enclosing {
-            Some(g) => Environment::global(g.clone()),
-            None => env,
-        }
-    }
-
     pub fn nested(enclosing: EnvRef) -> EnvRef {
         Rc::new(RefCell::new(Self {
             enclosing: Some(enclosing),
@@ -63,12 +56,7 @@ impl Environment {
         if distance == 0 {
             env
         } else {
-            let p = env
-                .borrow()
-                .enclosing
-                .clone()
-                .expect(&format!("Reached globals at distance {}", distance));
-            Self::ancestor(p, distance - 1)
+            Self::ancestor(env.borrow().enclosing.clone().unwrap(), distance - 1)
         }
     }
 

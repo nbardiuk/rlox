@@ -18,15 +18,21 @@ pub struct Interpreter<'a> {
     lox: &'a mut Lox,
     locals: &'a HashMap<Token, usize>,
     env: EnvRef,
+    global: EnvRef,
 }
 
 impl<'a> Interpreter<'a> {
     pub fn new(lox: &'a mut Lox, locals: &'a HashMap<Token, usize>, env: EnvRef) -> Self {
-        let global = Environment::global(env.clone());
+        let global = env.clone();
         global
             .borrow_mut()
             .define("clock", F(Rc::new(Clock::new())));
-        Self { lox, locals, env }
+        Self {
+            lox,
+            locals,
+            env,
+            global,
+        }
     }
 
     pub fn interpret(&mut self, statements: Vec<Stmt>) {
@@ -160,9 +166,7 @@ impl<'a> Interpreter<'a> {
                 if let Some(distance) = self.locals.get(name) {
                     Environment::assign_at(self.env.clone(), *distance, name, value)
                 } else {
-                    Environment::global(self.env.clone())
-                        .borrow_mut()
-                        .assign(name, value)
+                    self.global.borrow_mut().assign(name, value)
                 }
             }
             Binary(left, op, right) => {
@@ -247,7 +251,7 @@ impl<'a> Interpreter<'a> {
         if let Some(distance) = self.locals.get(name) {
             Environment::get_at(self.env.clone(), *distance, name)
         } else {
-            Environment::global(self.env.clone()).borrow().get(name)
+            self.global.borrow().get(name)
         }
     }
 
