@@ -6,48 +6,48 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::Rc;
 
-pub type EnvRef = Rc<RefCell<Environment>>;
+pub type EnvRef = Rc<Env>;
 
-pub struct Environment {
-    enclosing: Option<Rc<RefCell<Environment>>>,
-    values: HashMap<String, Value>,
+pub struct Env {
+    enclosing: Option<EnvRef>,
+    values: RefCell<HashMap<String, Value>>,
 }
 
-impl Environment {
+impl Env {
     pub fn new() -> EnvRef {
-        Rc::new(RefCell::new(Self {
+        Rc::new(Self {
             enclosing: None,
-            values: HashMap::default(),
-        }))
+            values: RefCell::new(HashMap::default()),
+        })
     }
 
     pub fn nested(enclosing: EnvRef) -> EnvRef {
-        Rc::new(RefCell::new(Self {
+        Rc::new(Self {
             enclosing: Some(enclosing),
-            values: HashMap::default(),
-        }))
+            values: RefCell::new(HashMap::default()),
+        })
     }
 
     pub fn unnested(e: EnvRef) -> EnvRef {
-        if let Some(e) = e.borrow().enclosing.clone() {
+        if let Some(e) = e.enclosing.clone() {
             e
         } else {
-            e.clone()
+            e
         }
     }
 
-    pub fn define(&mut self, var: &str, value: Value) {
-        self.values.insert(var.to_string(), value);
+    pub fn define(&self, var: &str, value: Value) {
+        self.values.borrow_mut().insert(var.to_string(), value);
     }
 
-    pub fn assign(&mut self, token: &Token, value: Value) -> Result<Value> {
+    pub fn assign(&self, token: &Token, value: Value) -> Result<Value> {
         let var = &token.lexeme;
-        if self.values.contains_key(var) {
-            self.values.insert(var.clone(), value.clone());
+        if self.values.borrow().contains_key(var) {
+            self.values.borrow_mut().insert(var.clone(), value.clone());
             return Ok(value);
         }
         match &self.enclosing {
-            Some(p) => p.borrow_mut().assign(token, value),
+            Some(p) => p.assign(token, value),
             _ => err(&token, &format!("Undefined variable '{}'.", var)),
         }
     }
@@ -56,13 +56,13 @@ impl Environment {
         if distance == 0 {
             env
         } else {
-            Self::ancestor(env.borrow().enclosing.clone().unwrap(), distance - 1)
+            Self::ancestor(env.enclosing.clone().unwrap(), distance - 1)
         }
     }
 
     pub fn get_at(env: EnvRef, distance: usize, token: &Token) -> Result<Value> {
         let var = &token.lexeme;
-        match Self::ancestor(env, distance).borrow().values.get(var) {
+        match Self::ancestor(env, distance).values.borrow().get(var) {
             Some(value) => Ok(value.clone()),
             None => err(&token, &format!("Undefined variable '{}'.", var)),
         }
@@ -71,18 +71,18 @@ impl Environment {
     pub fn assign_at(env: EnvRef, distance: usize, token: &Token, value: Value) -> Result<Value> {
         let var = &token.lexeme;
         Self::ancestor(env, distance)
-            .borrow_mut()
             .values
+            .borrow_mut()
             .insert(var.clone(), value.clone());
         Ok(value)
     }
 
     pub fn get(&self, token: &Token) -> Result<Value> {
         let var = &token.lexeme;
-        match self.values.get(var) {
+        match self.values.borrow().get(var) {
             Some(value) => Ok(value.clone()),
             None => match &self.enclosing {
-                Some(p) => p.borrow_mut().get(token),
+                Some(p) => p.get(token),
                 _ => err(&token, &format!("Undefined variable '{}'.", var)),
             },
         }

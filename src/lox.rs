@@ -1,5 +1,5 @@
+use crate::environment::Env;
 use crate::environment::EnvRef;
-use crate::environment::Environment;
 use crate::interpreter::Interpreter;
 use crate::interpreter::RuntimeException;
 use crate::parser::Parser;
@@ -53,7 +53,7 @@ impl Lox {
     }
 
     pub fn run_file(&mut self, path: &str) -> io::Result<()> {
-        let env = Environment::new();
+        let env = Env::new();
         self.run(env, &fs::read_to_string(path)?);
         if self.has_error {
             process::exit(65)
@@ -65,7 +65,7 @@ impl Lox {
     }
 
     pub fn run_prompt(&mut self) -> io::Result<()> {
-        let env = Environment::new();
+        let env = Env::new();
         loop {
             self.print("> ")?;
             self.out.borrow_mut().flush()?;

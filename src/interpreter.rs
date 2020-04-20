@@ -1,7 +1,7 @@
 use crate::ast::Expr::{self, *};
 use crate::ast::Stmt::{self, *};
+use crate::environment::Env;
 use crate::environment::EnvRef;
-use crate::environment::Environment;
 use crate::lox::Lox;
 use crate::token::Literal as L;
 use crate::token::Token;
@@ -26,9 +26,7 @@ pub struct Interpreter<'a> {
 impl<'a> Interpreter<'a> {
     pub fn new(lox: &'a mut Lox, locals: &'a HashMap<Token, usize>, env: EnvRef) -> Self {
         let global = env.clone();
-        global
-            .borrow_mut()
-            .define("clock", F(Rc::new(Clock::new())));
+        global.define("clock", F(Rc::new(Clock::new())));
         Self {
             lox,
             locals,
@@ -53,7 +51,7 @@ impl<'a> Interpreter<'a> {
     fn execute(&mut self, stmt: &Stmt) -> Result<()> {
         match stmt {
             Block(statements) => {
-                let env = Environment::nested(self.env.clone());
+                let env = Env::nested(self.env.clone());
                 let old_env = self.env.clone();
                 self.env = env;
                 self.execute_block(&statements)?;
@@ -70,11 +68,11 @@ impl<'a> Interpreter<'a> {
                     None
                 };
 
-                self.env.borrow_mut().define(&name.lexeme, V(L::Nil));
+                self.env.define(&name.lexeme, V(L::Nil));
 
                 let env = if let Some(s) = &superclass {
-                    let e = Environment::nested(self.env.clone());
-                    e.borrow_mut().define("super", C(s.clone()));
+                    let e = Env::nested(self.env.clone());
+                    e.define("super", C(s.clone()));
                     e
                 } else {
                     self.env.clone()
@@ -97,12 +95,12 @@ impl<'a> Interpreter<'a> {
                 }
 
                 let env = if superclass.is_some() {
-                    Environment::unnested(env)
+                    Env::unnested(env)
                 } else {
                     env
                 };
 
-                env.borrow_mut().assign(
+                env.assign(
                     name,
                     C(Rc::new(Class {
                         name: name.clone(),
@@ -114,7 +112,7 @@ impl<'a> Interpreter<'a> {
             Expression(expression) => {
                 self.evaluate(&expression).map(|_| ())?;
             }
-            Function(name, params, body) => self.env.borrow_mut().define(
+            Function(name, params, body) => self.env.define(
                 &name.lexeme,
                 F(Rc::new(Function {
                     name: name.clone(),
@@ -145,9 +143,9 @@ impl<'a> Interpreter<'a> {
             Var(name, initializer) => match initializer {
                 Some(i) => {
                     let value = self.evaluate(&i)?;
-                    self.env.borrow_mut().define(&name.lexeme, value)
+                    self.env.define(&name.lexeme, value)
                 }
-                _ => self.env.borrow_mut().define(&name.lexeme, V(L::Nil)),
+                _ => self.env.define(&name.lexeme, V(L::Nil)),
             },
             While(condition, body) => {
                 while is_truthy(&self.evaluate(&condition)?) {
@@ -163,9 +161,9 @@ impl<'a> Interpreter<'a> {
             Asign(name, value) => {
                 let value = self.evaluate(value)?;
                 if let Some(distance) = self.locals.get(name) {
-                    Environment::assign_at(self.env.clone(), *distance, name, value)
+                    Env::assign_at(self.env.clone(), *distance, name, value)
                 } else {
-                    self.global.borrow_mut().assign(name, value)
+                    self.global.assign(name, value)
                 }
             }
             Binary(left, op, right) => {
@@ -223,14 +221,10 @@ impl<'a> Interpreter<'a> {
             }
             Super(keyword, method) => {
                 if let Some(distance) = self.locals.get(keyword) {
-                    if let C(superclass) =
-                        Environment::get_at(self.env.clone(), *distance, keyword)?
-                    {
+                    if let C(superclass) = Env::get_at(self.env.clone(), *distance, keyword)? {
                         let mut this = keyword.clone();
                         this.lexeme = "this".to_string();
-                        if let I(object) =
-                            Environment::get_at(self.env.clone(), *distance - 1, &this)?
-                        {
+                        if let I(object) = Env::get_at(self.env.clone(), *distance - 1, &this)? {
                             return if let Some(method) = superclass.find_method(&method.lexeme) {
                                 Ok(F(Rc::new(method.bind(object))))
                             } else {
@@ -248,9 +242,9 @@ impl<'a> Interpreter<'a> {
 
     fn lookup_variable(&self, name: &Token) -> Result<Value> {
         if let Some(distance) = self.locals.get(name) {
-            Environment::get_at(self.env.clone(), *distance, name)
+            Env::get_at(self.env.clone(), *distance, name)
         } else {
-            self.global.borrow().get(name)
+            self.global.get(name)
         }
     }
 
@@ -333,8 +327,8 @@ struct Function {
 }
 impl Function {
     fn bind(&self, instance: Instance) -> Self {
-        let closure = Environment::nested(self.closure.clone());
-        closure.borrow_mut().define("this", I(instance));
+        let closure = Env::nested(self.closure.clone());
+        closure.define("this", I(instance));
         Function {
             name: self.name.clone(),
             params: self.params.clone(),
@@ -347,7 +341,7 @@ impl Function {
     fn this(&self) -> Result<Value> {
         let mut this = self.name.clone();
         this.lexeme = "this".to_string();
-        Environment::get_at(self.closure.clone(), 0, &this)
+        Env::get_at(self.closure.clone(), 0, &this)
     }
 }
 impl fmt::Display for Function {
@@ -357,17 +351,12 @@ impl fmt::Display for Function {
 }
 impl Callable for Function {
     fn call(&self, interpreter: &mut Interpreter, _: &Token, args: &[Value]) -> Result<Value> {
-        let env = Environment::nested(self.closure.clone());
+        let env = Env::nested(self.closure.clone());
         let old_env = interpreter.env.clone();
         interpreter.env = env;
 
         let defs = self.params.iter().zip(args.iter());
-        defs.for_each(|(param, arg)| {
-            interpreter
-                .env
-                .borrow_mut()
-                .define(&param.lexeme, arg.clone())
-        });
+        defs.for_each(|(param, arg)| interpreter.env.define(&param.lexeme, arg.clone()));
 
         let r = match interpreter.execute_block(&self.body) {
             Err(RuntimeException::Return(v)) => {
@@ -511,7 +500,7 @@ mod spec {
             let v = out.borrow().to_vec();
             return String::from_utf8(v).unwrap();
         }
-        Interpreter::new(&mut lox, &locals, Environment::new()).interpret(statements);
+        Interpreter::new(&mut lox, &locals, Env::new()).interpret(statements);
         let v = out.borrow().to_vec();
         return String::from_utf8(v).unwrap();
     }
