@@ -1,6 +1,7 @@
 use crate::ast::Expr;
 use crate::ast::Stmt;
 use crate::lox::Lox;
+use crate::token::Literal;
 use crate::token::Token;
 use crate::token::TokenType;
 
@@ -170,7 +171,7 @@ impl<'a> Parser<'a> {
         let condition = if !self.check(Semicolon) {
             self.expression()?
         } else {
-            Expr::Literal(crate::token::Literal::Bool(true))
+            Box::new(Expr::Literal(Literal::Bool(true)))
         };
         self.consume(Semicolon, "Expect ';' after loop condition.")?;
 
@@ -246,19 +247,19 @@ impl<'a> Parser<'a> {
         Ok(Stmt::Expression(value))
     }
 
-    fn expression(&mut self) -> Result<Expr, ParserError> {
+    fn expression(&mut self) -> Result<Box<Expr>, ParserError> {
         self.assignment()
     }
 
-    fn assignment(&mut self) -> Result<Expr, ParserError> {
+    fn assignment(&mut self) -> Result<Box<Expr>, ParserError> {
         use TokenType::*;
         let expr = self.or()?;
 
         if self.matches(&[Equal]) {
-            if let Expr::Variable(name) = expr {
-                Ok(Expr::Asign(name, Box::new(self.assignment()?)))
-            } else if let Expr::Get(object, name) = expr {
-                Ok(Expr::Set(object, name, Box::new(self.assignment()?)))
+            if let Expr::Variable(name) = *expr {
+                Ok(Box::new(Expr::Asign(name, self.assignment()?)))
+            } else if let Expr::Get(object, name) = *expr {
+                Ok(Box::new(Expr::Set(object, name, self.assignment()?)))
             } else {
                 self.error(self.previous(), "Invalid assignment target.")
             }
@@ -267,95 +268,95 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn or(&mut self) -> Result<Expr, ParserError> {
+    fn or(&mut self) -> Result<Box<Expr>, ParserError> {
         use TokenType::*;
         let mut expr = self.and()?;
 
         while self.matches(&[Or]) {
             let operator = self.previous();
             let right = self.and()?;
-            expr = Expr::Logical(Box::new(expr), operator, Box::new(right));
+            expr = Box::new(Expr::Logical(expr, operator, right));
         }
 
         Ok(expr)
     }
 
-    fn and(&mut self) -> Result<Expr, ParserError> {
+    fn and(&mut self) -> Result<Box<Expr>, ParserError> {
         use TokenType::*;
         let mut expr = self.equality()?;
 
         while self.matches(&[And]) {
             let operator = self.previous();
             let right = self.equality()?;
-            expr = Expr::Logical(Box::new(expr), operator, Box::new(right));
+            expr = Box::new(Expr::Logical(expr, operator, right));
         }
 
         Ok(expr)
     }
 
-    fn equality(&mut self) -> Result<Expr, ParserError> {
+    fn equality(&mut self) -> Result<Box<Expr>, ParserError> {
         use TokenType::*;
         let mut expr = self.comparison()?;
 
         while self.matches(&[BangEqual, EqualEqual]) {
             let operator = self.previous();
             let right = self.comparison()?;
-            expr = Expr::Binary(Box::new(expr), operator, Box::new(right));
+            expr = Box::new(Expr::Binary(expr, operator, right));
         }
 
         Ok(expr)
     }
 
-    fn comparison(&mut self) -> Result<Expr, ParserError> {
+    fn comparison(&mut self) -> Result<Box<Expr>, ParserError> {
         use TokenType::*;
         let mut expr = self.addition()?;
 
         while self.matches(&[Greater, GreaterEqual, Less, LessEqual]) {
             let operator = self.previous();
             let right = self.addition()?;
-            expr = Expr::Binary(Box::new(expr), operator, Box::new(right));
+            expr = Box::new(Expr::Binary(expr, operator, right));
         }
 
         Ok(expr)
     }
 
-    fn addition(&mut self) -> Result<Expr, ParserError> {
+    fn addition(&mut self) -> Result<Box<Expr>, ParserError> {
         use TokenType::*;
         let mut expr = self.multiplication()?;
 
         while self.matches(&[Minus, Plus]) {
             let operator = self.previous();
             let right = self.multiplication()?;
-            expr = Expr::Binary(Box::new(expr), operator, Box::new(right));
+            expr = Box::new(Expr::Binary(expr, operator, right));
         }
 
         Ok(expr)
     }
 
-    fn multiplication(&mut self) -> Result<Expr, ParserError> {
+    fn multiplication(&mut self) -> Result<Box<Expr>, ParserError> {
         use TokenType::*;
         let mut expr = self.unary()?;
 
         while self.matches(&[Slash, Star]) {
             let operator = self.previous();
             let right = self.unary()?;
-            expr = Expr::Binary(Box::new(expr), operator, Box::new(right));
+            expr = Box::new(Expr::Binary(expr, operator, right));
         }
 
         Ok(expr)
     }
 
-    fn unary(&mut self) -> Result<Expr, ParserError> {
+    fn unary(&mut self) -> Result<Box<Expr>, ParserError> {
         use TokenType::*;
         if self.matches(&[Bang, Minus]) {
             let operator = self.previous();
             let right = self.unary()?;
-            return Ok(Expr::Unary(operator, Box::new(right)));
+            return Ok(Box::new(Expr::Unary(operator, right)));
         }
         self.call()
     }
 
-    fn call(&mut self) -> Result<Expr, ParserError> {
+    fn call(&mut self) -> Result<Box<Expr>, ParserError> {
         use TokenType::*;
 
         let mut expr = self.primary()?;
@@ -364,7 +365,7 @@ impl<'a> Parser<'a> {
                 expr = self.finish_call(expr)?;
             } else if self.matches(&[Dot]) {
                 let name = self.consume(Identifier, "Expect property name after '.'.")?;
-                expr = Expr::Get(Box::new(expr), name);
+                expr = Box::new(Expr::Get(expr, name));
             } else {
                 break;
             }
@@ -373,7 +374,7 @@ impl<'a> Parser<'a> {
         Ok(expr)
     }
 
-    fn finish_call(&mut self, callee: Expr) -> Result<Expr, ParserError> {
+    fn finish_call(&mut self, callee: Box<Expr>) -> Result<Box<Expr>, ParserError> {
         use TokenType::*;
         let mut args = vec![];
         if !self.check(RightParen) {
@@ -384,37 +385,37 @@ impl<'a> Parser<'a> {
                         &format!("Cannot have more than {} arguments.", MAX_ARGS),
                     );
                 }
-                args.push(self.expression()?);
+                args.push(*self.expression()?);
                 if !self.matches(&[Comma]) {
                     break;
                 }
             }
         }
         let paren = self.consume(RightParen, "Expect ')' after arguments.")?;
-        Ok(Expr::Call(Box::new(callee), paren, args))
+        Ok(Box::new(Expr::Call(callee, paren, args)))
     }
 
-    fn primary(&mut self) -> Result<Expr, ParserError> {
+    fn primary(&mut self) -> Result<Box<Expr>, ParserError> {
         use TokenType::*;
         if self.matches(&[False, True, Nil, Number, String]) {
-            return Ok(Expr::Literal(self.previous().literal));
+            return Ok(Box::new(Expr::Literal(self.previous().literal)));
         }
         if self.matches(&[LeftParen]) {
             let expr = self.expression()?;
             self.consume(RightParen, "Expect ')' after expression.")?;
-            return Ok(Expr::Grouping(Box::new(expr)));
+            return Ok(Box::new(Expr::Grouping(expr)));
         }
         if self.matches(&[Super]) {
             let keyword = self.previous();
             self.consume(Dot, "Expect '.' after 'super'.")?;
             let method = self.consume(Identifier, "Expect superclass method name.")?;
-            return Ok(Expr::Super(keyword, method));
+            return Ok(Box::new(Expr::Super(keyword, method)));
         }
         if self.matches(&[This]) {
-            return Ok(Expr::This(self.previous()));
+            return Ok(Box::new(Expr::This(self.previous())));
         }
         if self.matches(&[Identifier]) {
-            return Ok(Expr::Variable(self.previous()));
+            return Ok(Box::new(Expr::Variable(self.previous())));
         }
         self.error(self.peek(), "Expect expression.")
     }

@@ -6,13 +6,13 @@ use std::result::Result;
 pub enum Stmt {
     Block(Vec<Stmt>),
     Class(Token, Option<Token>, Vec<Stmt>),
-    Expression(Expr),
+    Expression(Box<Expr>),
     Function(Token, Vec<Token>, Vec<Stmt>),
-    If(Expr, Box<Stmt>, Option<Box<Stmt>>),
-    Print(Expr),
-    Return(Token, Option<Expr>),
-    Var(Token, Option<Expr>),
-    While(Expr, Box<Stmt>),
+    If(Box<Expr>, Box<Stmt>, Option<Box<Stmt>>),
+    Print(Box<Expr>),
+    Return(Token, Option<Box<Expr>>),
+    Var(Token, Option<Box<Expr>>),
+    While(Box<Expr>, Box<Stmt>),
 }
 
 #[derive(Clone)]
