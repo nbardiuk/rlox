@@ -355,8 +355,9 @@ impl Callable for Function {
         let old_env = interpreter.env.clone();
         interpreter.env = env;
 
-        let defs = self.params.iter().zip(args.iter());
-        defs.for_each(|(param, arg)| interpreter.env.define(&param.lexeme, arg.clone()));
+        for (param, arg) in self.params.iter().zip(args) {
+            interpreter.env.define(&param.lexeme, arg.clone());
+        }
 
         let r = match interpreter.execute_block(&self.body) {
             Err(RuntimeException::Return(v)) => {
