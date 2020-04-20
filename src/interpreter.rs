@@ -3,7 +3,9 @@ use crate::ast::Stmt::{self, *};
 use crate::environment::EnvRef;
 use crate::environment::Environment;
 use crate::lox::Lox;
-use crate::token::{self, Literal::*, Token, TokenType as t};
+use crate::token::Literal as L;
+use crate::token::Token;
+use crate::token::TokenType as T;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::fmt;
@@ -68,7 +70,7 @@ impl<'a> Interpreter<'a> {
                     None
                 };
 
-                self.env.borrow_mut().define(&name.lexeme, V(Nil));
+                self.env.borrow_mut().define(&name.lexeme, V(L::Nil));
 
                 let env = if let Some(s) = &superclass {
                     let e = Environment::nested(self.env.clone());
@@ -136,7 +138,7 @@ impl<'a> Interpreter<'a> {
             Return(_keyword, value) => {
                 let value = match value {
                     Some(value) => self.evaluate(value)?,
-                    None => V(Nil),
+                    None => V(L::Nil),
                 };
                 return Err(RuntimeException::Return(value));
             }
@@ -145,7 +147,7 @@ impl<'a> Interpreter<'a> {
                     let value = self.evaluate(&i)?;
                     self.env.borrow_mut().define(&name.lexeme, value)
                 }
-                _ => self.env.borrow_mut().define(&name.lexeme, V(Nil)),
+                _ => self.env.borrow_mut().define(&name.lexeme, V(L::Nil)),
             },
             While(condition, body) => {
                 while is_truthy(&self.evaluate(&condition)?) {
@@ -168,18 +170,18 @@ impl<'a> Interpreter<'a> {
             }
             Binary(left, op, right) => {
                 match (op.typ, self.evaluate(left)?, self.evaluate(right)?) {
-                    (t::BangEqual, V(a), V(b)) => Ok(V(Bool(a != b))),
-                    (t::EqualEqual, V(a), V(b)) => Ok(V(Bool(a == b))),
-                    (t::Greater, V(Number(a)), V(Number(b))) => Ok(V(Bool(a > b))),
-                    (t::GreaterEqual, V(Number(a)), V(Number(b))) => Ok(V(Bool(a >= b))),
-                    (t::Less, V(Number(a)), V(Number(b))) => Ok(V(Bool(a < b))),
-                    (t::LessEqual, V(Number(a)), V(Number(b))) => Ok(V(Bool(a <= b))),
-                    (t::Minus, V(Number(a)), V(Number(b))) => Ok(V(Number(a - b))),
-                    (t::Plus, V(Number(a)), V(Number(b))) => Ok(V(Number(a + b))),
-                    (t::Plus, V(String(a)), V(String(b))) => Ok(V(String(a + &b))),
-                    (t::Plus, _, _) => err(op, "Operands must be two numbers or two strings"),
-                    (t::Slash, V(Number(a)), V(Number(b))) => Ok(V(Number(a / b))),
-                    (t::Star, V(Number(a)), V(Number(b))) => Ok(V(Number(a * b))),
+                    (T::BangEqual, V(a), V(b)) => Ok(V(L::Bool(a != b))),
+                    (T::EqualEqual, V(a), V(b)) => Ok(V(L::Bool(a == b))),
+                    (T::Greater, V(L::Number(a)), V(L::Number(b))) => Ok(V(L::Bool(a > b))),
+                    (T::GreaterEqual, V(L::Number(a)), V(L::Number(b))) => Ok(V(L::Bool(a >= b))),
+                    (T::Less, V(L::Number(a)), V(L::Number(b))) => Ok(V(L::Bool(a < b))),
+                    (T::LessEqual, V(L::Number(a)), V(L::Number(b))) => Ok(V(L::Bool(a <= b))),
+                    (T::Minus, V(L::Number(a)), V(L::Number(b))) => Ok(V(L::Number(a - b))),
+                    (T::Plus, V(L::Number(a)), V(L::Number(b))) => Ok(V(L::Number(a + b))),
+                    (T::Plus, V(L::String(a)), V(L::String(b))) => Ok(V(L::String(a + &b))),
+                    (T::Plus, _, _) => err(op, "Operands must be two numbers or two strings"),
+                    (T::Slash, V(L::Number(a)), V(L::Number(b))) => Ok(V(L::Number(a / b))),
+                    (T::Star, V(L::Number(a)), V(L::Number(b))) => Ok(V(L::Number(a * b))),
                     _ => err(op, "Operands must be numbers"),
                 }
             }
@@ -200,14 +202,14 @@ impl<'a> Interpreter<'a> {
             Logical(left, op, right) => {
                 let left = self.evaluate(left)?;
                 match (op.typ, is_truthy(&left)) {
-                    (t::And, false) => Ok(left),
-                    (t::Or, true) => Ok(left),
+                    (T::And, false) => Ok(left),
+                    (T::Or, true) => Ok(left),
                     _ => self.evaluate(right),
                 }
             }
             Unary(op, right) => match (op.typ, self.evaluate(right)?) {
-                (t::Bang, r) => Ok(V(Bool(!is_truthy(&r)))),
-                (t::Minus, V(Number(d))) => Ok(V(Number(-d))),
+                (T::Bang, r) => Ok(V(L::Bool(!is_truthy(&r)))),
+                (T::Minus, V(L::Number(d))) => Ok(V(L::Number(-d))),
                 _ => err(op, "Operand must be a number"),
             },
             Set(object, name, value) => {
@@ -272,7 +274,7 @@ impl<'a> Interpreter<'a> {
 
 #[derive(Clone)]
 pub enum Value {
-    V(token::Literal),
+    V(L),
     F(Rc<dyn Callable>),
     C(Rc<Class>),
     I(Instance),
@@ -311,7 +313,7 @@ impl Callable for Clock {
 
     fn call(&self, _: &mut Interpreter, _: &Token, _: &[Value]) -> Result<Value> {
         let now = Instant::now();
-        Ok(V(Number(now.duration_since(self.start).as_secs_f64())))
+        Ok(V(L::Number(now.duration_since(self.start).as_secs_f64())))
     }
 }
 
@@ -379,7 +381,7 @@ impl Callable for Function {
                 if self.is_initializer {
                     self.this()
                 } else {
-                    Ok(V(Nil))
+                    Ok(V(L::Nil))
                 }
             }
             Err(e) => Err(e),
@@ -398,7 +400,7 @@ impl Callable for Function {
 pub struct Class {
     name: Box<Token>,
     superclass: Option<Rc<Class>>,
-    methods: HashMap<std::string::String, Function>,
+    methods: HashMap<String, Function>,
 }
 impl Class {
     fn find_method(&self, name: &str) -> Option<Function> {
@@ -433,7 +435,7 @@ impl Callable for Class {
 #[derive(Clone)]
 pub struct Instance {
     class: Class,
-    fields: Rc<RefCell<HashMap<std::string::String, Value>>>,
+    fields: Rc<RefCell<HashMap<String, Value>>>,
 }
 impl fmt::Display for Instance {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -464,7 +466,7 @@ impl Instance {
 }
 
 pub enum RuntimeException {
-    Error(Token, std::string::String),
+    Error(Token, String),
     Return(Value),
 }
 
@@ -480,8 +482,8 @@ pub fn err<T>(token: &Token, message: &str) -> Result<T> {
 
 fn is_truthy(v: &Value) -> bool {
     match v {
-        V(Nil) => false,
-        V(Bool(b)) => *b,
+        V(L::Nil) => false,
+        V(L::Bool(b)) => *b,
         _ => true,
     }
 }
@@ -493,7 +495,7 @@ mod spec {
     use crate::resolver::Resolver;
     use crate::scanner::Scanner;
 
-    fn run<'a>(source: &'a str) -> std::string::String {
+    fn run<'a>(source: &'a str) -> String {
         let out = Rc::new(RefCell::new(vec![]));
         let mut lox = Lox::new_t(out.clone());
         let mut scanner = Scanner::new(source);
@@ -502,16 +504,16 @@ mod spec {
         let statements = parser.parse();
         if lox.has_error {
             let v = out.borrow().to_vec();
-            return std::string::String::from_utf8(v).unwrap();
+            return String::from_utf8(v).unwrap();
         }
         let locals = Resolver::new(&mut lox).resolve(&statements).locals;
         if lox.has_error {
             let v = out.borrow().to_vec();
-            return std::string::String::from_utf8(v).unwrap();
+            return String::from_utf8(v).unwrap();
         }
         Interpreter::new(&mut lox, &locals, Environment::new()).interpret(statements);
         let v = out.borrow().to_vec();
-        return std::string::String::from_utf8(v).unwrap();
+        return String::from_utf8(v).unwrap();
     }
 
     #[test]
