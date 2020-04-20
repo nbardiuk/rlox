@@ -78,8 +78,6 @@ impl<'a> Interpreter<'a> {
                     self.env.clone()
                 };
 
-                let superclass = superclass.map(Rc::new);
-
                 let mut ms = HashMap::default();
                 for method in methods {
                     if let Function(name, params, body) = method {
@@ -104,11 +102,11 @@ impl<'a> Interpreter<'a> {
 
                 env.borrow_mut().assign(
                     name,
-                    C(Class {
+                    C(Rc::new(Class {
                         name: name.clone(),
                         superclass,
                         methods: ms,
-                    }),
+                    })),
                 )?;
             }
             Expression(expression) => {
@@ -186,7 +184,7 @@ impl<'a> Interpreter<'a> {
                 }
             }
             Call(callee, paren, args) => match self.evaluate(callee)? {
-                C(callee) => self.call(Rc::new(callee), args, paren),
+                C(callee) => self.call(callee, args, paren),
                 F(callee) => self.call(callee, args, paren),
                 _ => err(paren, "Can only call functions and classes."),
             },
@@ -276,7 +274,7 @@ impl<'a> Interpreter<'a> {
 pub enum Value {
     V(token::Literal),
     F(Rc<dyn Callable>),
-    C(Class),
+    C(Rc<Class>),
     I(Instance),
 }
 
