@@ -68,7 +68,7 @@ impl<'a> Parser<'a> {
                         &format!("Cannot have more than {} parameters.", MAX_ARGS),
                     );
                 }
-                parameters.push(self.consume(Identifier, "Expect parameter name.")?);
+                parameters.push(*self.consume(Identifier, "Expect parameter name.")?);
                 if !self.matches(&[Comma]) {
                     break;
                 }
@@ -171,7 +171,7 @@ impl<'a> Parser<'a> {
         let condition = if !self.check(Semicolon) {
             self.expression()?
         } else {
-            Box::new(Expr::Literal(Literal::Bool(true)))
+            Box::new(Expr::Literal(Box::new(Literal::Bool(true))))
         };
         self.consume(Semicolon, "Expect ';' after loop condition.")?;
 
@@ -398,7 +398,7 @@ impl<'a> Parser<'a> {
     fn primary(&mut self) -> Result<Box<Expr>, ParserError> {
         use TokenType::*;
         if self.matches(&[False, True, Nil, Number, String]) {
-            return Ok(Box::new(Expr::Literal(self.previous().literal)));
+            return Ok(Box::new(Expr::Literal(Box::new(self.previous().literal))));
         }
         if self.matches(&[LeftParen]) {
             let expr = self.expression()?;
@@ -435,20 +435,20 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn consume(&mut self, typ: TokenType, message: &str) -> Result<Token, ParserError> {
+    fn consume(&mut self, typ: TokenType, message: &str) -> Result<Box<Token>, ParserError> {
         if self.check(typ) {
             return Ok(self.advance());
         }
         self.error(self.peek(), message)
     }
 
-    fn error<T>(&mut self, token: Token, message: &str) -> Result<T, ParserError> {
+    fn error<T>(&mut self, token: Box<Token>, message: &str) -> Result<T, ParserError> {
         self.lox.error_token(&token, message);
         Err(ParserError {})
     }
 
-    fn previous(&self) -> Token {
-        self.tokens[self.current - 1].clone() // TODO use get instead of unchecked indexing
+    fn previous(&self) -> Box<Token> {
+        Box::new(self.tokens[self.current - 1].clone()) // TODO use get instead of unchecked indexing
     }
 
     fn matches(&mut self, types: &[TokenType]) -> bool {
@@ -465,7 +465,7 @@ impl<'a> Parser<'a> {
         !self.is_at_end() && self.peek().typ == typ
     }
 
-    fn advance(&mut self) -> Token {
+    fn advance(&mut self) -> Box<Token> {
         if !self.is_at_end() {
             self.current += 1
         }
@@ -476,8 +476,8 @@ impl<'a> Parser<'a> {
         self.peek().typ == TokenType::EOF
     }
 
-    fn peek(&self) -> Token {
-        self.tokens[self.current].clone() // TODO use get instead of unchecked indexing
+    fn peek(&self) -> Box<Token> {
+        Box::new(self.tokens[self.current].clone()) // TODO use get instead of unchecked indexing
     }
 }
 

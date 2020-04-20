@@ -5,30 +5,30 @@ use std::result::Result;
 #[derive(Clone)]
 pub enum Stmt {
     Block(Vec<Stmt>),
-    Class(Token, Option<Token>, Vec<Stmt>),
+    Class(Box<Token>, Option<Box<Token>>, Vec<Stmt>),
     Expression(Box<Expr>),
-    Function(Token, Vec<Token>, Vec<Stmt>),
+    Function(Box<Token>, Vec<Token>, Vec<Stmt>),
     If(Box<Expr>, Box<Stmt>, Option<Box<Stmt>>),
     Print(Box<Expr>),
-    Return(Token, Option<Box<Expr>>),
-    Var(Token, Option<Box<Expr>>),
+    Return(Box<Token>, Option<Box<Expr>>),
+    Var(Box<Token>, Option<Box<Expr>>),
     While(Box<Expr>, Box<Stmt>),
 }
 
 #[derive(Clone)]
 pub enum Expr {
-    Asign(Token, Box<Expr>),
-    Binary(Box<Expr>, Token, Box<Expr>),
-    Call(Box<Expr>, Token, Vec<Expr>),
-    Get(Box<Expr>, Token),
+    Asign(Box<Token>, Box<Expr>),
+    Binary(Box<Expr>, Box<Token>, Box<Expr>),
+    Call(Box<Expr>, Box<Token>, Vec<Expr>),
+    Get(Box<Expr>, Box<Token>),
     Grouping(Box<Expr>),
-    Literal(Literal),
-    Logical(Box<Expr>, Token, Box<Expr>),
-    Unary(Token, Box<Expr>),
-    Set(Box<Expr>, Token, Box<Expr>),
-    Super(Token, Token),
-    This(Token),
-    Variable(Token),
+    Literal(Box<Literal>),
+    Logical(Box<Expr>, Box<Token>, Box<Expr>),
+    Unary(Box<Token>, Box<Expr>),
+    Set(Box<Expr>, Box<Token>, Box<Expr>),
+    Super(Box<Token>, Box<Token>),
+    This(Box<Token>),
+    Variable(Box<Token>),
 }
 
 impl Display for Token {

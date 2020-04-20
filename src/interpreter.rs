@@ -198,7 +198,7 @@ impl<'a> Interpreter<'a> {
                 }
             }
             Grouping(expression) => self.evaluate(&expression),
-            Literal(value) => Ok(V(value.clone())),
+            Literal(value) => Ok(V(*value.clone())),
             Logical(left, op, right) => {
                 let left = self.evaluate(left)?;
                 match (op.typ, is_truthy(&left)) {
@@ -325,7 +325,7 @@ impl fmt::Display for Clock {
 
 #[derive(Clone)]
 struct Function {
-    name: Token,
+    name: Box<Token>,
     params: Vec<Token>,
     body: Vec<Stmt>,
     closure: EnvRef,
@@ -398,7 +398,7 @@ impl Callable for Function {
 
 #[derive(Clone)]
 pub struct Class {
-    name: Token,
+    name: Box<Token>,
     superclass: Option<Rc<Class>>,
     methods: HashMap<std::string::String, Function>,
 }
