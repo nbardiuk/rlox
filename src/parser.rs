@@ -86,9 +86,7 @@ impl<'a> Parser<'a> {
         let name = self.consume(Identifier, "Expect class name.")?;
 
         let superclass = if self.matches(&[Less]) {
-            Some(Expr::Variable(
-                self.consume(Identifier, "Expect superclass name.")?,
-            ))
+            Some(self.consume(Identifier, "Expect superclass name.")?)
         } else {
             None
         };

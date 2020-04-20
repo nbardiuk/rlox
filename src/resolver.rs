@@ -67,8 +67,7 @@ impl<'a> Resolver<'a> {
                     self.declare(name);
                     self.define(name);
 
-                    if let Some(Variable(sup)) = superclass {
-                        // FIXME we know it always variable but info is lost
+                    if let Some(sup) = superclass {
                         if name.lexeme == sup.lexeme {
                             self.lox
                                 .error_token(sup, "A class cannot inherit from itself.");

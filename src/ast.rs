@@ -5,7 +5,7 @@ use std::result::Result;
 #[derive(Clone)]
 pub enum Stmt {
     Block(Vec<Stmt>),
-    Class(Token, Option<Expr>, Vec<Stmt>),
+    Class(Token, Option<Token>, Vec<Stmt>),
     Expression(Expr),
     Function(Token, Vec<Token>, Vec<Stmt>),
     If(Expr, Box<Stmt>, Option<Box<Stmt>>),

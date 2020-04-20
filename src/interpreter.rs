@@ -58,8 +58,7 @@ impl<'a> Interpreter<'a> {
                 self.env = old_env;
             }
             Class(name, superclass, methods) => {
-                let superclass = if let Some(Variable(n)) = superclass {
-                    //FIXME we know it is always a variable but the info is lost
+                let superclass = if let Some(n) = superclass {
                     if let C(s) = self.evaluate(&Variable(n.clone()))? {
                         Some(s)
                     } else {
