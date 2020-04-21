@@ -19,8 +19,7 @@ impl PartialEq for Token {
 }
 impl Hash for Token {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.column.hash(state);
-        self.line.hash(state);
+        state.write_u8(self.column as u8);
     }
 }
 impl Token {
