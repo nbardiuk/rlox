@@ -261,7 +261,7 @@ impl<'a> Interpreter<'a> {
             for arg in args {
                 ars.push(self.evaluate(arg)?);
             }
-            callee.call(self, paren, &ars)
+            callee.call(self, paren, ars)
         }
     }
 }
@@ -286,7 +286,8 @@ impl fmt::Display for Value {
 }
 
 pub trait Callable: fmt::Display {
-    fn call(&self, interpreter: &mut Interpreter, paren: &Token, args: &[Value]) -> Result<Value>;
+    fn call(&self, interpreter: &mut Interpreter, paren: &Token, args: Vec<Value>)
+        -> Result<Value>;
     fn arity(&self) -> usize;
 }
 
@@ -305,7 +306,7 @@ impl Callable for Clock {
         0
     }
 
-    fn call(&self, _: &mut Interpreter, _: &Token, _: &[Value]) -> Result<Value> {
+    fn call(&self, _: &mut Interpreter, _: &Token, _: Vec<Value>) -> Result<Value> {
         let now = Instant::now();
         Ok(V(L::Number(now.duration_since(self.start).as_secs_f64())))
     }
@@ -350,13 +351,13 @@ impl fmt::Display for Function {
     }
 }
 impl Callable for Function {
-    fn call(&self, interpreter: &mut Interpreter, _: &Token, args: &[Value]) -> Result<Value> {
+    fn call(&self, interpreter: &mut Interpreter, _: &Token, args: Vec<Value>) -> Result<Value> {
         let env = Env::nested(self.closure.clone());
         let old_env = interpreter.env.clone();
         interpreter.env = env;
 
         for (param, arg) in self.params.iter().zip(args) {
-            interpreter.env.define(&param.lexeme, arg.clone());
+            interpreter.env.define(&param.lexeme, arg);
         }
 
         let r = match interpreter.execute_block(&self.body) {
@@ -409,7 +410,12 @@ impl fmt::Display for Class {
     }
 }
 impl Callable for Class {
-    fn call(&self, interpreter: &mut Interpreter, paren: &Token, args: &[Value]) -> Result<Value> {
+    fn call(
+        &self,
+        interpreter: &mut Interpreter,
+        paren: &Token,
+        args: Vec<Value>,
+    ) -> Result<Value> {
         let this = Instance::new(self);
         if let Some(init) = self.find_method("init") {
             init.bind(this.clone()).call(interpreter, paren, args)?;
