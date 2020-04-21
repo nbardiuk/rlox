@@ -19,7 +19,7 @@ fn main() -> io::Result<()> {
         0 => lox.run_prompt(),
         1 => lox.run_file(&args[0]),
         _ => {
-            println!("Usage: rlox [script]");
+            println!("Usage: interpreter [script]");
             process::exit(64)
         }
     }
