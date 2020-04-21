@@ -52,29 +52,29 @@ impl Env {
         }
     }
 
-    fn ancestor(env: EnvRef, distance: usize) -> EnvRef {
+    pub fn get_at(&self, distance: usize, token: &Token) -> Result<Value> {
+        let var = &token.lexeme;
         if distance == 0 {
-            env
+            match self.values.borrow().get(var) {
+                Some(value) => Ok(value.clone()),
+                None => err(&token, &format!("Undefined variable '{}'.", var)),
+            }
         } else {
-            Self::ancestor(env.enclosing.clone().unwrap(), distance - 1)
+            self.enclosing.clone().unwrap().get_at(distance - 1, token)
         }
     }
 
-    pub fn get_at(env: EnvRef, distance: usize, token: &Token) -> Result<Value> {
+    pub fn assign_at(&self, distance: usize, token: &Token, value: Value) -> Result<Value> {
         let var = &token.lexeme;
-        match Self::ancestor(env, distance).values.borrow().get(var) {
-            Some(value) => Ok(value.clone()),
-            None => err(&token, &format!("Undefined variable '{}'.", var)),
+        if distance == 0 {
+            self.values.borrow_mut().insert(var.clone(), value.clone());
+            Ok(value)
+        } else {
+            self.enclosing
+                .clone()
+                .unwrap()
+                .assign_at(distance - 1, token, value)
         }
-    }
-
-    pub fn assign_at(env: EnvRef, distance: usize, token: &Token, value: Value) -> Result<Value> {
-        let var = &token.lexeme;
-        Self::ancestor(env, distance)
-            .values
-            .borrow_mut()
-            .insert(var.clone(), value.clone());
-        Ok(value)
     }
 
     pub fn get(&self, token: &Token) -> Result<Value> {

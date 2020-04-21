@@ -110,7 +110,7 @@ impl<'a> Interpreter<'a> {
                 )?;
             }
             Expression(expression) => {
-                self.evaluate(&expression).map(|_| ())?;
+                self.evaluate(&expression)?;
             }
             Function(name, params, body) => self.env.define(
                 &name.lexeme,
@@ -161,7 +161,7 @@ impl<'a> Interpreter<'a> {
             Asign(name, value) => {
                 let value = self.evaluate(value)?;
                 if let Some(distance) = self.locals.get(name) {
-                    Env::assign_at(self.env.clone(), *distance, name, value)
+                    self.env.assign_at(*distance, name, value)
                 } else {
                     self.global.assign(name, value)
                 }
@@ -221,10 +221,10 @@ impl<'a> Interpreter<'a> {
             }
             Super(keyword, method) => {
                 if let Some(distance) = self.locals.get(keyword) {
-                    if let C(superclass) = Env::get_at(self.env.clone(), *distance, keyword)? {
+                    if let C(superclass) = self.env.get_at(*distance, keyword)? {
                         let mut this = keyword.clone();
                         this.lexeme = "this".to_string();
-                        if let I(object) = Env::get_at(self.env.clone(), *distance - 1, &this)? {
+                        if let I(object) = self.env.get_at(*distance - 1, &this)? {
                             return if let Some(method) = superclass.find_method(&method.lexeme) {
                                 Ok(F(Rc::new(method.bind(object))))
                             } else {
@@ -242,7 +242,7 @@ impl<'a> Interpreter<'a> {
 
     fn lookup_variable(&self, name: &Token) -> Result<Value> {
         if let Some(distance) = self.locals.get(name) {
-            Env::get_at(self.env.clone(), *distance, name)
+            self.env.get_at(*distance, name)
         } else {
             self.global.get(name)
         }
@@ -341,7 +341,7 @@ impl Function {
     fn this(&self) -> Result<Value> {
         let mut this = self.name.clone();
         this.lexeme = "this".to_string();
-        Env::get_at(self.closure.clone(), 0, &this)
+        self.closure.get_at(0, &this)
     }
 }
 impl fmt::Display for Function {
@@ -472,8 +472,7 @@ pub fn err<T>(token: &Token, message: &str) -> Result<T> {
 
 fn is_truthy(v: &Value) -> bool {
     match v {
-        V(L::Nil) => false,
-        V(L::Bool(b)) => *b,
+        V(L::Bool(false)) | V(L::Nil) => false,
         _ => true,
     }
 }
