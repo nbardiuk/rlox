@@ -1,7 +1,9 @@
-use crate::chunks::Chunk;
-use crate::chunks::OpCode::*;
-use crate::vm::Vm;
+use crate::vm::interpret;
+use crate::vm::InterpretResult::*;
+use std::env;
+use std::fs;
 use std::io;
+use std::io::Write;
 use std::process;
 
 mod chunks;
@@ -10,26 +12,37 @@ mod value;
 mod vm;
 
 fn main() -> io::Result<()> {
-    let mut c = Chunk::new();
-    let i = c.add_constant(1.2);
-    c.write(OpConstant(i), 123);
+    let args: Vec<_> = env::args().skip(1).collect();
+    match args.len() {
+        0 => repl(),
+        1 => run_file(&args[0]),
+        _ => {
+            println!("Usage: vm [script]");
+            process::exit(64)
+        }
+    }
+}
 
-    let i = c.add_constant(3.4);
-    c.write(OpConstant(i), 123);
+fn repl() -> io::Result<()> {
+    loop {
+        print!("> ");
+        io::stdout().flush()?;
 
-    c.write(OpAdd, 123);
+        let mut line = String::new();
+        io::stdin().read_line(&mut line)?;
 
-    let i = c.add_constant(5.6);
-    c.write(OpConstant(i), 123);
+        interpret(&line);
+    }
+}
 
-    c.write(OpDivide, 123);
+fn run_file(path: &str) -> io::Result<()> {
+    let source = &fs::read_to_string(path)?;
 
-    c.write(OpNegate, 123);
+    let result = interpret(source);
 
-    c.write(OpReturn, 123);
-
-    let mut vm = Vm::new();
-    vm.interpret(c);
-
-    process::exit(0)
+    match result {
+        InterpretCompileError => process::exit(65),
+        InterpretRuntimeError => process::exit(70),
+        InterpretOk => Ok(()),
+    }
 }

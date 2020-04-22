@@ -73,6 +73,11 @@ impl Vm {
     }
 }
 
+pub fn interpret(source: &str) -> InterpretResult {
+    InterpretOk
+}
+
+use InterpretResult::*;
 pub enum InterpretResult {
     InterpretOk,
     InterpretCompileError,
