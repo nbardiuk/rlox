@@ -1,9 +1,21 @@
 use crate::chunks::Chunk;
 use crate::chunks::OpCode;
+use crate::vm::Vm;
 use OpCode::*;
 
+impl Vm {
+    pub fn debug_stack(&self) -> String {
+        let mut f = String::from("          ");
+        for v in self.stack.iter() {
+            f.push_str(&format!("[ {} ]", v));
+        }
+        f.push('\n');
+        f
+    }
+}
+
 impl Chunk {
-    pub fn disasemble_instruction(&self, offset: usize) {
+    pub fn disasemble_instruction(&self, offset: usize) -> String {
         let instruction = &self.code[offset];
         let line = self.lines[offset];
         let pref_line = if offset > 0 {
@@ -11,7 +23,7 @@ impl Chunk {
         } else {
             None
         };
-        print!("{}", self.di(offset, line, pref_line, instruction));
+        self.di(offset, line, pref_line, instruction)
     }
 
     pub fn disasemble(&self, name: &str) -> String {
@@ -62,6 +74,16 @@ impl Chunk {
 #[cfg(test)]
 mod spec {
     use super::*;
+
+    #[test]
+    fn stack() {
+        let mut vm = Vm::new();
+        vm.stack.push(1.);
+        vm.stack.push(2.2);
+        vm.stack.push(3.1);
+
+        assert_eq!(vm.debug_stack(), "          [ 1 ][ 2.2 ][ 3.1 ]\n")
+    }
 
     #[test]
     fn chunk() {

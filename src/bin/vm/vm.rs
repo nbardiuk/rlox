@@ -3,9 +3,12 @@ use crate::chunks::OpCode;
 use crate::chunks::OpCode::*;
 use crate::value::Value;
 
+const STACK_MAX: usize = 255;
+
 pub struct Vm {
     chunk: Chunk,
     ip: usize,
+    pub stack: Vec<Value>,
 }
 
 impl Vm {
@@ -13,6 +16,7 @@ impl Vm {
         Vm {
             chunk: Chunk::new(),
             ip: 0,
+            stack: Vec::with_capacity(STACK_MAX), // FIXME this is not really max
         }
     }
     pub fn interpret(&mut self, chunk: Chunk) -> InterpretResult {
@@ -24,15 +28,23 @@ impl Vm {
     fn run(&mut self) -> InterpretResult {
         loop {
             #[cfg(feature = "debug-trace")]
-            self.chunk.disasemble_instruction(self.ip);
+            {
+                print!("{}", self.debug_stack());
+                print!("{}", self.chunk.disasemble_instruction(self.ip));
+            }
 
             let instruction = self.read_byte();
             match instruction {
                 OpConstant(i) => {
                     let constant = self.read_constant(*i);
-                    println!("{}", constant);
+                    self.stack.push(*constant);
                 }
-                OpReturn => return InterpretResult::InterpretOk,
+                OpReturn => {
+                    if let Some(constant) = self.stack.pop() {
+                        println!("{}", constant);
+                    };
+                    return InterpretResult::InterpretOk;
+                }
             }
             self.ip += 1;
         }
