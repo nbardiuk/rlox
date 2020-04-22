@@ -59,6 +59,7 @@ impl Chunk {
         // Instruction
         match instruction {
             OpReturn => f.push_str("OP_RETURN"),
+            OpNegate => f.push_str("OP_NEGATE"),
             OpConstant(i) => {
                 f.push_str(&format!(
                     "{:16} {:04} '{}'",

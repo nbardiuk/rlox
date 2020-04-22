@@ -1,8 +1,9 @@
 use crate::value::Value;
 
 pub enum OpCode {
-    OpReturn,
     OpConstant(usize),
+    OpNegate,
+    OpReturn,
 }
 
 pub struct Chunk {

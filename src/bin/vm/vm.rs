@@ -36,8 +36,12 @@ impl Vm {
             let instruction = self.read_byte();
             match instruction {
                 OpConstant(i) => {
-                    let constant = self.read_constant(*i);
-                    self.stack.push(*constant);
+                    self.stack.push(self.read_constant(*i));
+                }
+                OpNegate => {
+                    if let Some(constant) = self.stack.pop() {
+                        self.stack.push(-constant);
+                    }
                 }
                 OpReturn => {
                     if let Some(constant) = self.stack.pop() {
@@ -50,8 +54,8 @@ impl Vm {
         }
     }
 
-    fn read_constant(&self, i: usize) -> &Value {
-        &self.chunk.constants[i]
+    fn read_constant(&self, i: usize) -> Value {
+        self.chunk.constants[i]
     }
 
     fn read_byte(&self) -> &OpCode {
