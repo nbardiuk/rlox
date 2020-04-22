@@ -58,14 +58,18 @@ impl Chunk {
 
         // Instruction
         match instruction {
-            OpReturn => f.push_str("OP_RETURN"),
-            OpNegate => f.push_str("OP_NEGATE"),
+            OpAdd => f.push_str("OP_ADD"),
             OpConstant(i) => {
                 f.push_str(&format!(
                     "{:16} {:04} '{}'",
                     "OP_CONSTANT", i, self.constants[*i]
                 ));
             }
+            OpDivide => f.push_str("OP_DIVIDE"),
+            OpMultiply => f.push_str("OP_MULTIPLY"),
+            OpNegate => f.push_str("OP_NEGATE"),
+            OpReturn => f.push_str("OP_RETURN"),
+            OpSubstract => f.push_str("OP_SUBSTRACT"),
         };
         f.push('\n');
         f
