@@ -1,6 +1,7 @@
 use crate::chunks::Chunk;
 use crate::chunks::OpCode;
 use crate::chunks::OpCode::*;
+use crate::compiler::compile;
 use crate::value::Value;
 
 const STACK_MAX: usize = 255;
@@ -74,6 +75,7 @@ impl Vm {
 }
 
 pub fn interpret(source: &str) -> InterpretResult {
+    compile(source);
     InterpretOk
 }
 

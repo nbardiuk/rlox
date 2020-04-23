@@ -7,7 +7,9 @@ use std::io::Write;
 use std::process;
 
 mod chunks;
+mod compiler;
 mod debug;
+mod scanner;
 mod value;
 mod vm;
 
