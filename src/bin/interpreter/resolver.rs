@@ -239,13 +239,11 @@ impl<'a> Resolver<'a> {
     }
 
     fn resolve_local(&mut self, name: &Token) {
-        let mut distance = 0;
-        for scope in self.scopes.iter().rev() {
+        for (distance, scope) in self.scopes.iter().rev().enumerate() {
             if scope.contains_key(&name.lexeme) {
                 self.locals.insert(name.clone(), distance);
                 return;
             }
-            distance += 1;
         }
     }
 
