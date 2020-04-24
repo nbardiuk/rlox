@@ -7,7 +7,7 @@ pub fn compile(source: &str) {
     loop {
         let token = scanner.scan_token();
         if token.line != line {
-            print!("{:4}", token.line);
+            print!("{:4} ", token.line);
             line = token.line;
         } else {
             print!("   | ");
