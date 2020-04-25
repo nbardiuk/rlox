@@ -2,11 +2,11 @@ use crate::ast::Expr::{self, *};
 use crate::ast::Stmt::{self, *};
 use crate::lox::Lox;
 use crate::token::Token;
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 
 pub struct Resolver<'a> {
-    scopes: Vec<HashMap<String, bool>>,
-    pub locals: HashMap<Token, usize>,
+    scopes: Vec<FxHashMap<String, bool>>,
+    pub locals: FxHashMap<Token, usize>,
     function: FunctionType,
     class: ClassType,
     lox: &'a mut Lox,
@@ -31,7 +31,7 @@ impl<'a> Resolver<'a> {
     pub fn new(lox: &'a mut Lox) -> Self {
         Self {
             scopes: vec![],
-            locals: HashMap::default(),
+            locals: FxHashMap::default(),
             function: FunctionType::None,
             class: ClassType::None,
             lox,
@@ -231,7 +231,7 @@ impl<'a> Resolver<'a> {
     }
 
     fn begin_scope(&mut self) {
-        self.scopes.push(HashMap::default());
+        self.scopes.push(FxHashMap::default());
     }
 
     fn end_scope(&mut self) {

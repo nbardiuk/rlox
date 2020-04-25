@@ -6,8 +6,8 @@ use crate::lox::Lox;
 use crate::token::Literal as L;
 use crate::token::Token;
 use crate::token::TokenType as T;
+use rustc_hash::FxHashMap;
 use std::cell::RefCell;
-use std::collections::HashMap;
 use std::fmt;
 use std::rc::Rc;
 use std::result::Result::{Err, Ok};
@@ -18,13 +18,13 @@ pub type Result<T> = std::result::Result<T, RuntimeException>;
 
 pub struct Interpreter<'a> {
     lox: &'a mut Lox,
-    locals: &'a HashMap<Token, usize>,
+    locals: &'a FxHashMap<Token, usize>,
     env: EnvRef,
     global: EnvRef,
 }
 
 impl<'a> Interpreter<'a> {
-    pub fn new(lox: &'a mut Lox, locals: &'a HashMap<Token, usize>, env: EnvRef) -> Self {
+    pub fn new(lox: &'a mut Lox, locals: &'a FxHashMap<Token, usize>, env: EnvRef) -> Self {
         let global = env.clone();
         global.define("clock", F(Rc::new(Clock::new())));
         Self {
@@ -78,7 +78,7 @@ impl<'a> Interpreter<'a> {
                     self.env.clone()
                 };
 
-                let mut ms = HashMap::default();
+                let mut ms = FxHashMap::default();
                 for method in methods {
                     if let Function(name, params, body) = method {
                         ms.insert(
@@ -391,7 +391,7 @@ impl Callable for Function {
 pub struct Class {
     name: Box<Token>,
     superclass: Option<Rc<Class>>,
-    methods: HashMap<String, Function>,
+    methods: FxHashMap<String, Function>,
 }
 impl Class {
     fn find_method(&self, name: &str) -> Option<Function> {
@@ -431,7 +431,7 @@ impl Callable for Class {
 #[derive(Clone)]
 pub struct Instance {
     class: Class,
-    fields: Rc<RefCell<HashMap<String, Value>>>,
+    fields: Rc<RefCell<FxHashMap<String, Value>>>,
 }
 impl fmt::Display for Instance {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -442,7 +442,7 @@ impl Instance {
     fn new(class: &Class) -> Self {
         Self {
             class: class.clone(),
-            fields: Rc::new(RefCell::new(HashMap::default())),
+            fields: Rc::new(RefCell::new(FxHashMap::default())),
         }
     }
 

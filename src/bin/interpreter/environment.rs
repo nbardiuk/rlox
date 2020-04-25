@@ -2,29 +2,29 @@ use crate::interpreter::err;
 use crate::interpreter::Result;
 use crate::interpreter::Value;
 use crate::token::Token;
+use rustc_hash::FxHashMap;
 use std::cell::RefCell;
-use std::collections::HashMap;
 use std::rc::Rc;
 
 pub type EnvRef = Rc<Env>;
 
 pub struct Env {
     enclosing: Option<EnvRef>,
-    values: RefCell<HashMap<String, Value>>,
+    values: RefCell<FxHashMap<String, Value>>,
 }
 
 impl Env {
     pub fn new() -> EnvRef {
         Rc::new(Self {
             enclosing: None,
-            values: RefCell::new(HashMap::default()),
+            values: RefCell::new(FxHashMap::default()),
         })
     }
 
     pub fn nested(enclosing: EnvRef) -> EnvRef {
         Rc::new(Self {
             enclosing: Some(enclosing),
-            values: RefCell::new(HashMap::default()),
+            values: RefCell::new(FxHashMap::default()),
         })
     }
 

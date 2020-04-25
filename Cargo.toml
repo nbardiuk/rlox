@@ -5,6 +5,7 @@ authors = ["Nazarii Bardiuk <nazarii@bardiuk.com>"]
 edition = "2018"
 
 [dependencies]
+rustc-hash = "1.1.0"
 
 [features]
 default = []
