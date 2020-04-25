@@ -7,6 +7,7 @@ use crate::scanner::TokenType;
 use crate::scanner::TokenType as T;
 use crate::value::Value;
 use Precedence as Prec;
+use Value as V;
 
 pub struct Compiler<'s> {
     scanner: Scanner<'s>,
@@ -58,7 +59,7 @@ impl<'s> Compiler<'s> {
             .unwrap_or_default()
             .parse()
             .unwrap_or_default();
-        self.emit_constant(value);
+        self.emit_constant(V::Number(value));
     }
 
     fn grouping(&mut self) {

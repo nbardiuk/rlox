@@ -3,6 +3,7 @@ use crate::chunks::OpCode;
 use crate::chunks::OpCode as Op;
 use crate::compiler::Compiler;
 use crate::value::Value;
+use Value as V;
 
 const STACK_MAX: usize = 255;
 
@@ -10,6 +11,22 @@ pub struct Vm {
     chunk: Chunk,
     ip: usize,
     pub stack: Vec<Value>,
+}
+
+macro_rules! binary_number {
+    ($self:ident, $t:ident, $f:expr) => {{
+        match ($self.stack.last(), $self.stack.last()) {
+            (Some(V::Number(_)), Some(V::Number(_))) => {}
+            _ => {
+                $self.runtime_error("Operatnds must be numers.");
+                return InterpretRuntimeError;
+            }
+        }
+
+        if let (Some(V::Number(b)), Some(V::Number(a))) = ($self.stack.pop(), $self.stack.pop()) {
+            $self.stack.push(V::$t($f(a, b)));
+        }
+    }};
 }
 
 impl Vm {
@@ -41,15 +58,22 @@ impl Vm {
 
             let instruction = self.read_byte();
             match instruction {
-                Op::Add => self.binary(|a, b| a + b),
+                Op::Add => binary_number!(self, Number, |a, b| a + b),
                 Op::Constant(i) => {
                     self.stack.push(self.read_constant(*i));
                 }
-                Op::Divide => self.binary(|a, b| a / b),
-                Op::Multiply => self.binary(|a, b| a * b),
+                Op::Divide => binary_number!(self, Number, |a, b| a / b),
+                Op::Multiply => binary_number!(self, Number, |a, b| a * b),
                 Op::Negate => {
-                    if let Some(constant) = self.stack.pop() {
-                        self.stack.push(-constant);
+                    match self.stack.last() {
+                        Some(V::Number(_)) => {}
+                        _ => {
+                            self.runtime_error("Operatnd must be a numer.");
+                            return InterpretRuntimeError;
+                        }
+                    }
+                    if let Some(V::Number(constant)) = self.stack.pop() {
+                        self.stack.push(V::Number(-constant));
                     }
                 }
                 Op::Return => {
@@ -58,15 +82,9 @@ impl Vm {
                     };
                     return InterpretOk;
                 }
-                Op::Substract => self.binary(|a, b| a - b),
+                Op::Substract => binary_number!(self, Number, |a, b| a - b),
             }
             self.ip += 1;
-        }
-    }
-
-    fn binary(&mut self, f: fn(Value, Value) -> Value) {
-        if let (Some(b), Some(a)) = (self.stack.pop(), self.stack.pop()) {
-            self.stack.push(f(a, b));
         }
     }
 
@@ -76,6 +94,14 @@ impl Vm {
 
     fn read_byte(&self) -> &OpCode {
         &self.chunk.code[self.ip]
+    }
+
+    // TODO use format args ???
+    fn runtime_error(&mut self, message: &str) {
+        eprintln!("{}", message);
+        eprintln!("[line {}] in script", self.chunk.lines[self.ip]);
+
+        self.stack.clear();
     }
 }
 

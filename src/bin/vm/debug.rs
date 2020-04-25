@@ -79,13 +79,14 @@ impl Chunk {
 #[cfg(test)]
 mod spec {
     use super::*;
+    use crate::value::Value as V;
 
     #[test]
     fn stack() {
         let mut vm = Vm::new();
-        vm.stack.push(1.);
-        vm.stack.push(2.2);
-        vm.stack.push(3.1);
+        vm.stack.push(V::Number(1.));
+        vm.stack.push(V::Number(2.2));
+        vm.stack.push(V::Number(3.1));
 
         assert_eq!(vm.debug_stack(), "          [ 1 ][ 2.2 ][ 3.1 ]\n")
     }
@@ -93,7 +94,7 @@ mod spec {
     #[test]
     fn chunk() {
         let mut c = Chunk::new();
-        let i = c.add_constant(1.2);
+        let i = c.add_constant(V::Number(1.2));
         c.write(Op::Constant(i), 123);
         c.write(Op::Return, 123);
 
