@@ -27,7 +27,7 @@ impl<'s> Scanner<'s> {
         }
     }
 
-    pub fn scan_token(&mut self) -> Token {
+    pub fn scan_token(&mut self) -> Token<'s> {
         self.skip_whitespace();
 
         self.start = self.current;
@@ -129,7 +129,7 @@ impl<'s> Scanner<'s> {
         self.current = &self.current[1..];
     }
 
-    fn identifier(&mut self) -> Token {
+    fn identifier(&mut self) -> Token<'s> {
         'id: loop {
             match self.peek() {
                 Some(a) if is_alpha(a) || a.is_ascii_digit() => {
@@ -185,7 +185,7 @@ impl<'s> Scanner<'s> {
         }
     }
 
-    fn number(&mut self) -> Token {
+    fn number(&mut self) -> Token<'s> {
         'digits: loop {
             match self.peek() {
                 Some(d) if d.is_ascii_digit() => {
@@ -215,7 +215,7 @@ impl<'s> Scanner<'s> {
         self.token(Number)
     }
 
-    fn string(&mut self) -> Token {
+    fn string(&mut self) -> Token<'s> {
         'string: loop {
             if let Some('"') | None = self.peek() {
                 break 'string;
@@ -233,7 +233,7 @@ impl<'s> Scanner<'s> {
         self.token(String)
     }
 
-    fn token(&self, typ: TokenType) -> Token {
+    fn token(&self, typ: TokenType) -> Token<'s> {
         Token {
             typ,
             line: self.line,
@@ -241,7 +241,7 @@ impl<'s> Scanner<'s> {
         }
     }
 
-    fn error(&self, message: &'s str) -> Token {
+    fn error(&self, message: &'s str) -> Token<'s> {
         Token {
             typ: Error,
             line: self.line,
@@ -250,7 +250,7 @@ impl<'s> Scanner<'s> {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone, Copy, Eq, Hash)]
 pub enum TokenType {
     And,
     Bang,

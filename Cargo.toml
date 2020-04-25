@@ -7,5 +7,5 @@ edition = "2018"
 [dependencies]
 
 [features]
-default = ["debug-trace"]
+default = []
 debug-trace = []

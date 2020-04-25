@@ -1,7 +1,7 @@
 use crate::chunks::Chunk;
 use crate::chunks::OpCode;
-use crate::chunks::OpCode::*;
-use crate::compiler::compile;
+use crate::chunks::OpCode as Op;
+use crate::compiler::Compiler;
 use crate::value::Value;
 
 const STACK_MAX: usize = 255;
@@ -20,10 +20,15 @@ impl Vm {
             stack: Vec::with_capacity(STACK_MAX), // FIXME this is not really max
         }
     }
-    pub fn interpret(&mut self, chunk: Chunk) -> InterpretResult {
-        self.chunk = chunk;
-        self.ip = 0;
-        self.run()
+
+    pub fn interpret(&mut self, source: &str) -> InterpretResult {
+        if let Some(chunk) = Compiler::new().compile(source) {
+            self.chunk = chunk;
+            self.ip = 0;
+            self.run()
+        } else {
+            InterpretCompileError
+        }
     }
 
     fn run(&mut self) -> InterpretResult {
@@ -36,24 +41,24 @@ impl Vm {
 
             let instruction = self.read_byte();
             match instruction {
-                OpAdd => self.binary(|a, b| a + b),
-                OpConstant(i) => {
+                Op::Add => self.binary(|a, b| a + b),
+                Op::Constant(i) => {
                     self.stack.push(self.read_constant(*i));
                 }
-                OpDivide => self.binary(|a, b| a / b),
-                OpMultiply => self.binary(|a, b| a * b),
-                OpNegate => {
+                Op::Divide => self.binary(|a, b| a / b),
+                Op::Multiply => self.binary(|a, b| a * b),
+                Op::Negate => {
                     if let Some(constant) = self.stack.pop() {
                         self.stack.push(-constant);
                     }
                 }
-                OpReturn => {
+                Op::Return => {
                     if let Some(constant) = self.stack.pop() {
                         println!("{}", constant);
                     };
-                    return InterpretResult::InterpretOk;
+                    return InterpretOk;
                 }
-                OpSubstract => self.binary(|a, b| a - b),
+                Op::Substract => self.binary(|a, b| a - b),
             }
             self.ip += 1;
         }
@@ -72,11 +77,6 @@ impl Vm {
     fn read_byte(&self) -> &OpCode {
         &self.chunk.code[self.ip]
     }
-}
-
-pub fn interpret(source: &str) -> InterpretResult {
-    compile(source);
-    InterpretOk
 }
 
 use InterpretResult::*;

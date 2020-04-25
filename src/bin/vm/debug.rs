@@ -1,7 +1,7 @@
 use crate::chunks::Chunk;
 use crate::chunks::OpCode;
 use crate::vm::Vm;
-use OpCode::*;
+use OpCode as Op;
 
 impl Vm {
     pub fn debug_stack(&self) -> String {
@@ -58,18 +58,18 @@ impl Chunk {
 
         // Instruction
         match instruction {
-            OpAdd => f.push_str("OP_ADD"),
-            OpConstant(i) => {
+            Op::Add => f.push_str("OP_ADD"),
+            Op::Constant(i) => {
                 f.push_str(&format!(
                     "{:16} {:04} '{}'",
                     "OP_CONSTANT", i, self.constants[*i]
                 ));
             }
-            OpDivide => f.push_str("OP_DIVIDE"),
-            OpMultiply => f.push_str("OP_MULTIPLY"),
-            OpNegate => f.push_str("OP_NEGATE"),
-            OpReturn => f.push_str("OP_RETURN"),
-            OpSubstract => f.push_str("OP_SUBSTRACT"),
+            Op::Divide => f.push_str("OP_DIVIDE"),
+            Op::Multiply => f.push_str("OP_MULTIPLY"),
+            Op::Negate => f.push_str("OP_NEGATE"),
+            Op::Return => f.push_str("OP_RETURN"),
+            Op::Substract => f.push_str("OP_SUBSTRACT"),
         };
         f.push('\n');
         f
@@ -94,8 +94,8 @@ mod spec {
     fn chunk() {
         let mut c = Chunk::new();
         let i = c.add_constant(1.2);
-        c.write(OpConstant(i), 123);
-        c.write(OpReturn, 123);
+        c.write(Op::Constant(i), 123);
+        c.write(Op::Return, 123);
 
         assert_eq!(
             c.disasemble("test chunk"),

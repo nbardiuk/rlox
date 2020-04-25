@@ -1,13 +1,13 @@
 use crate::value::Value;
 
 pub enum OpCode {
-    OpAdd,
-    OpConstant(usize),
-    OpDivide,
-    OpMultiply,
-    OpNegate,
-    OpReturn,
-    OpSubstract,
+    Add,
+    Constant(usize),
+    Divide,
+    Multiply,
+    Negate,
+    Return,
+    Substract,
 }
 
 pub struct Chunk {
@@ -24,10 +24,12 @@ impl Chunk {
             lines: vec![],
         }
     }
+
     pub fn write(&mut self, code: OpCode, line: usize) {
         self.code.push(code);
         self.lines.push(line);
     }
+
     pub fn add_constant(&mut self, value: Value) -> usize {
         self.constants.push(value);
         self.constants.len() - 1
