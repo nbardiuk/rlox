@@ -1,10 +1,14 @@
 use crate::value::Value;
 
+#[derive(Clone, Copy)]
 pub enum OpCode {
     Add,
     Constant(usize),
     Divide,
     False,
+    Equal,
+    Greater,
+    Less,
     Multiply,
     Negate,
     Nil,

@@ -103,6 +103,12 @@ impl<'s> Compiler<'s> {
             T::Minus => self.emit_code(Op::Substract),
             T::Star => self.emit_code(Op::Multiply),
             T::Slash => self.emit_code(Op::Divide),
+            T::EqualEqual => self.emit_code(Op::Equal),
+            T::BangEqual => self.emit_codes(&[Op::Equal, Op::Not]),
+            T::Greater => self.emit_code(Op::Greater),
+            T::GreaterEqual => self.emit_codes(&[Op::Greater, Op::Not]),
+            T::Less => self.emit_code(Op::Less),
+            T::LessEqual => self.emit_codes(&[Op::Less, Op::Not]),
             _ => panic!("Unreachable."),
         }
     }
@@ -146,7 +152,16 @@ impl<'s> Compiler<'s> {
 
     fn infix(&mut self, t: TokenType) {
         match t {
-            T::Minus | T::Plus | T::Slash | T::Star => self.binary(),
+            T::BangEqual
+            | T::EqualEqual
+            | T::Greater
+            | T::GreaterEqual
+            | T::Less
+            | T::LessEqual
+            | T::Minus
+            | T::Plus
+            | T::Slash
+            | T::Star => self.binary(),
             _ => {}
         }
     }
@@ -190,6 +205,12 @@ impl<'s> Compiler<'s> {
     fn emit_code(&mut self, code: OpCode) {
         let line = self.previous.as_ref().map(|t| t.line).unwrap_or_default();
         self.current_chunk().write(code, line)
+    }
+
+    fn emit_codes(&mut self, codes: &[OpCode]) {
+        for code in codes {
+            self.emit_code(*code);
+        }
     }
 
     fn emit_constant(&mut self, value: Value) {
@@ -266,6 +287,8 @@ impl Precedence {
         match t {
             T::Minus | T::Plus => P::Term,
             T::Slash | T::Star => P::Factor,
+            T::BangEqual | T::EqualEqual => P::Equality,
+            T::Greater | T::GreaterEqual | T::Less | T::LessEqual => P::Comparison,
             _ => P::None,
         }
     }

@@ -1,6 +1,6 @@
 use std::fmt::{Display, Error, Formatter};
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq)]
 pub enum Value {
     Bool(bool),
     Nil,

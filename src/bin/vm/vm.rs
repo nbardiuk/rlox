@@ -62,16 +62,15 @@ impl Vm {
                 Op::Constant(i) => {
                     self.stack.push(self.read_constant(*i));
                 }
-                Op::Nil => self.stack.push(V::Nil),
-                Op::True => self.stack.push(V::Bool(true)),
-                Op::False => self.stack.push(V::Bool(false)),
                 Op::Divide => binary_number!(self, Number, |a, b| a / b),
-                Op::Multiply => binary_number!(self, Number, |a, b| a * b),
-                Op::Not => {
-                    if let Some(v) = self.stack.pop() {
-                        self.stack.push(V::Bool(is_falsey(v)));
-                    }
+                Op::Equal => {
+                    let (b, a) = (self.stack.pop(), self.stack.pop());
+                    self.stack.push(V::Bool(a == b));
                 }
+                Op::False => self.stack.push(V::Bool(false)),
+                Op::Greater => binary_number!(self, Bool, |a, b| a > b),
+                Op::Less => binary_number!(self, Bool, |a, b| a < b),
+                Op::Multiply => binary_number!(self, Number, |a, b| a * b),
                 Op::Negate => {
                     match self.stack.last() {
                         Some(V::Number(_)) => {}
@@ -84,6 +83,12 @@ impl Vm {
                         self.stack.push(V::Number(-constant));
                     }
                 }
+                Op::Nil => self.stack.push(V::Nil),
+                Op::Not => {
+                    if let Some(v) = self.stack.pop() {
+                        self.stack.push(V::Bool(is_falsey(v)));
+                    }
+                }
                 Op::Return => {
                     if let Some(constant) = self.stack.pop() {
                         println!("{}", constant);
@@ -91,6 +96,7 @@ impl Vm {
                     return InterpretOk;
                 }
                 Op::Substract => binary_number!(self, Number, |a, b| a - b),
+                Op::True => self.stack.push(V::Bool(true)),
             }
             self.ip += 1;
         }

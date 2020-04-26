@@ -66,7 +66,10 @@ impl Chunk {
                 ));
             }
             Op::Divide => f.push_str("OP_DIVIDE"),
+            Op::Equal => f.push_str("OP_EQUAL"),
             Op::False => f.push_str("OP_FALSE"),
+            Op::Greater => f.push_str("OP_GREATER"),
+            Op::Less => f.push_str("OP_LESS"),
             Op::Multiply => f.push_str("OP_MULTIPLY"),
             Op::Negate => f.push_str("OP_NEGATE"),
             Op::Nil => f.push_str("OP_NIL"),
