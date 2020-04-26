@@ -8,6 +8,7 @@ pub enum OpCode {
     Multiply,
     Negate,
     Nil,
+    Not,
     Return,
     Substract,
     True,

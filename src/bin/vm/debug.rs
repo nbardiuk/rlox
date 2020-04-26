@@ -65,14 +65,15 @@ impl Chunk {
                     "OP_CONSTANT", i, self.constants[*i]
                 ));
             }
-            Op::Nil => f.push_str("OP_NIL"),
-            Op::True => f.push_str("OP_TRUE"),
-            Op::False => f.push_str("OP_FALSE"),
             Op::Divide => f.push_str("OP_DIVIDE"),
+            Op::False => f.push_str("OP_FALSE"),
             Op::Multiply => f.push_str("OP_MULTIPLY"),
             Op::Negate => f.push_str("OP_NEGATE"),
+            Op::Nil => f.push_str("OP_NIL"),
+            Op::Not => f.push_str("OP_NOT"),
             Op::Return => f.push_str("OP_RETURN"),
             Op::Substract => f.push_str("OP_SUBSTRACT"),
+            Op::True => f.push_str("OP_TRUE"),
         };
         f.push('\n');
         f

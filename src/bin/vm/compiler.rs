@@ -67,7 +67,7 @@ impl<'s> Compiler<'s> {
             Some(T::False) => self.emit_code(Op::False),
             Some(T::Nil) => self.emit_code(Op::Nil),
             Some(T::True) => self.emit_code(Op::True),
-            _ => {}
+            _ => panic!("Unreachable."),
         }
     }
 
@@ -84,8 +84,9 @@ impl<'s> Compiler<'s> {
 
         // emit the operator instruction
         match operator_type {
+            T::Bang => self.emit_code(Op::Not),
             T::Minus => self.emit_code(Op::Negate),
-            _ => {}
+            _ => panic!("Unreachable."),
         }
     }
 
@@ -102,7 +103,7 @@ impl<'s> Compiler<'s> {
             T::Minus => self.emit_code(Op::Substract),
             T::Star => self.emit_code(Op::Multiply),
             T::Slash => self.emit_code(Op::Divide),
-            _ => {}
+            _ => panic!("Unreachable."),
         }
     }
 
@@ -132,7 +133,7 @@ impl<'s> Compiler<'s> {
     fn prefix(&mut self, t: TokenType, message: &str) -> bool {
         match t {
             T::LeftParen => self.grouping(),
-            T::Minus => self.unary(),
+            T::Minus | T::Bang => self.unary(),
             T::Number => self.number(),
             T::False | T::True | T::Nil => self.literal(),
             _ => {

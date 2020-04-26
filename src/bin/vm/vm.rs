@@ -67,6 +67,11 @@ impl Vm {
                 Op::False => self.stack.push(V::Bool(false)),
                 Op::Divide => binary_number!(self, Number, |a, b| a / b),
                 Op::Multiply => binary_number!(self, Number, |a, b| a * b),
+                Op::Not => {
+                    if let Some(v) = self.stack.pop() {
+                        self.stack.push(V::Bool(is_falsey(v)));
+                    }
+                }
                 Op::Negate => {
                     match self.stack.last() {
                         Some(V::Number(_)) => {}
@@ -108,6 +113,12 @@ impl Vm {
     }
 }
 
+fn is_falsey(v: Value) -> bool {
+    match v {
+        V::Bool(false) | V::Nil => true,
+        _ => false,
+    }
+}
 use InterpretResult::*;
 pub enum InterpretResult {
     InterpretOk,
