@@ -62,6 +62,15 @@ impl<'s> Compiler<'s> {
         self.emit_constant(V::Number(value));
     }
 
+    fn literal(&mut self) {
+        match self.previous_type() {
+            Some(T::False) => self.emit_code(Op::False),
+            Some(T::Nil) => self.emit_code(Op::Nil),
+            Some(T::True) => self.emit_code(Op::True),
+            _ => {}
+        }
+    }
+
     fn grouping(&mut self) {
         self.expression();
         self.consume(T::RightParen, "Expect ')' after expression.");
@@ -125,6 +134,7 @@ impl<'s> Compiler<'s> {
             T::LeftParen => self.grouping(),
             T::Minus => self.unary(),
             T::Number => self.number(),
+            T::False | T::True | T::Nil => self.literal(),
             _ => {
                 self.error(message);
                 return false;

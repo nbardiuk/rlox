@@ -18,7 +18,7 @@ macro_rules! binary_number {
         match ($self.stack.last(), $self.stack.last()) {
             (Some(V::Number(_)), Some(V::Number(_))) => {}
             _ => {
-                $self.runtime_error("Operatnds must be numers.");
+                $self.runtime_error("Operands must be numbers.");
                 return InterpretRuntimeError;
             }
         }
@@ -62,13 +62,16 @@ impl Vm {
                 Op::Constant(i) => {
                     self.stack.push(self.read_constant(*i));
                 }
+                Op::Nil => self.stack.push(V::Nil),
+                Op::True => self.stack.push(V::Bool(true)),
+                Op::False => self.stack.push(V::Bool(false)),
                 Op::Divide => binary_number!(self, Number, |a, b| a / b),
                 Op::Multiply => binary_number!(self, Number, |a, b| a * b),
                 Op::Negate => {
                     match self.stack.last() {
                         Some(V::Number(_)) => {}
                         _ => {
-                            self.runtime_error("Operatnd must be a numer.");
+                            self.runtime_error("Operand must be a number.");
                             return InterpretRuntimeError;
                         }
                     }

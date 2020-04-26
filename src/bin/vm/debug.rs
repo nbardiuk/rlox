@@ -65,6 +65,9 @@ impl Chunk {
                     "OP_CONSTANT", i, self.constants[*i]
                 ));
             }
+            Op::Nil => f.push_str("OP_NIL"),
+            Op::True => f.push_str("OP_TRUE"),
+            Op::False => f.push_str("OP_FALSE"),
             Op::Divide => f.push_str("OP_DIVIDE"),
             Op::Multiply => f.push_str("OP_MULTIPLY"),
             Op::Negate => f.push_str("OP_NEGATE"),

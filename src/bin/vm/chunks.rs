@@ -4,10 +4,13 @@ pub enum OpCode {
     Add,
     Constant(usize),
     Divide,
+    False,
     Multiply,
     Negate,
+    Nil,
     Return,
     Substract,
+    True,
 }
 
 pub struct Chunk {
