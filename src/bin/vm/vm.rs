@@ -15,16 +15,14 @@ pub struct Vm {
 
 macro_rules! binary_number {
     ($self:ident, $t:ident, $f:expr) => {{
-        match ($self.stack.last(), $self.stack.last()) {
-            (Some(V::Number(_)), Some(V::Number(_))) => {}
+        match ($self.stack.pop(), $self.stack.pop()) {
+            (Some(V::Number(b)), Some(V::Number(a))) => {
+                $self.stack.push(V::$t($f(a, b)));
+            }
             _ => {
                 $self.runtime_error("Operands must be numbers.");
                 return InterpretRuntimeError;
             }
-        }
-
-        if let (Some(V::Number(b)), Some(V::Number(a))) = ($self.stack.pop(), $self.stack.pop()) {
-            $self.stack.push(V::$t($f(a, b)));
         }
     }};
 }
@@ -58,7 +56,18 @@ impl Vm {
 
             let instruction = self.read_byte();
             match instruction {
-                Op::Add => binary_number!(self, Number, |a, b| a + b),
+                Op::Add => match (self.stack.pop(), self.stack.pop()) {
+                    (Some(V::Str(b)), Some(V::Str(a))) => {
+                        self.stack.push(V::Str(a + &b));
+                    }
+                    (Some(V::Number(b)), Some(V::Number(a))) => {
+                        self.stack.push(V::Number(a + b));
+                    }
+                    _ => {
+                        self.runtime_error("Operands must be two numbers or two strings.");
+                        return InterpretRuntimeError;
+                    }
+                },
                 Op::Constant(i) => {
                     self.stack.push(self.read_constant(*i));
                 }
@@ -103,7 +112,7 @@ impl Vm {
     }
 
     fn read_constant(&self, i: usize) -> Value {
-        self.chunk.constants[i]
+        self.chunk.constants[i].clone() // FIXME can I use reference here?
     }
 
     fn read_byte(&self) -> &OpCode {

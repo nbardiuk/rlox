@@ -128,6 +128,11 @@ impl<'s> Compiler<'s> {
         }
     }
 
+    fn string(&mut self) {
+        let lexeme = self.previous.as_ref().map(|t| t.lexeme).unwrap_or_default();
+        self.emit_constant(V::Str(String::from(&lexeme[1..lexeme.len() - 1])));
+    }
+
     fn previous_type(&self) -> Option<TokenType> {
         self.previous.as_ref().map(|t| t.typ)
     }
@@ -142,6 +147,7 @@ impl<'s> Compiler<'s> {
             T::Minus | T::Bang => self.unary(),
             T::Number => self.number(),
             T::False | T::True | T::Nil => self.literal(),
+            T::String => self.string(),
             _ => {
                 self.error(message);
                 return false;

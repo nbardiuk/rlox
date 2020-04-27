@@ -1,10 +1,11 @@
 use std::fmt::{Display, Error, Formatter};
 
-#[derive(Copy, Clone, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub enum Value {
     Bool(bool),
     Nil,
     Number(f64),
+    Str(String),
 }
 
 impl Display for Value {
@@ -14,6 +15,7 @@ impl Display for Value {
             Bool(b) => write!(f, "{}", b),
             Nil => write!(f, "nil"),
             Number(n) => write!(f, "{}", n),
+            Str(s) => write!(f, "\"{}\"", s),
         }
     }
 }
