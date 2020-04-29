@@ -5,6 +5,7 @@ use crate::scanner::Scanner;
 use crate::scanner::Token;
 use crate::scanner::TokenType;
 use crate::scanner::TokenType as T;
+use crate::value::ObjString;
 use crate::value::Value;
 use Precedence as Prec;
 use Value as V;
@@ -130,7 +131,7 @@ impl<'s> Compiler<'s> {
 
     fn string(&mut self) {
         let lexeme = self.previous.as_ref().map(|t| t.lexeme).unwrap_or_default();
-        self.emit_constant(V::Str(String::from(&lexeme[1..lexeme.len() - 1])));
+        self.emit_constant(V::Str(ObjString::new(&lexeme[1..lexeme.len() - 1])));
     }
 
     fn previous_type(&self) -> Option<TokenType> {

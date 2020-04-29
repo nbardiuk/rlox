@@ -58,7 +58,7 @@ impl Vm {
             match instruction {
                 Op::Add => match (self.stack.pop(), self.stack.pop()) {
                     (Some(V::Str(b)), Some(V::Str(a))) => {
-                        self.stack.push(V::Str(a + &b));
+                        self.stack.push(V::Str(a + b));
                     }
                     (Some(V::Number(b)), Some(V::Number(a))) => {
                         self.stack.push(V::Number(a + b));

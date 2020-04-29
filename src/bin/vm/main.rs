@@ -9,6 +9,7 @@ mod chunks;
 mod compiler;
 mod debug;
 mod scanner;
+mod table;
 mod value;
 mod vm;
 
