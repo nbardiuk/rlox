@@ -128,15 +128,15 @@ impl Table {
     }
 
     fn addjust_capacity(&mut self, capacity: usize) {
-        let mut entries = vec![Entry::new(); capacity];
-        swap(&mut self.entries, &mut entries);
         self.count = 0;
-        for entry in entries.iter_mut() {
-            if let Some(ref key) = entry.key {
-                self.count += 1;
+        let mut old_entries = vec![Entry::new(); capacity];
+        swap(&mut self.entries, &mut old_entries);
+        for old_entry in old_entries.iter_mut() {
+            if let Some(ref key) = old_entry.key {
                 let dest = self.find_entry_mut(key);
-                swap(&mut dest.key, &mut entry.key);
-                swap(&mut dest.value, &mut entry.value);
+                swap(&mut dest.key, &mut old_entry.key);
+                swap(&mut dest.value, &mut old_entry.value);
+                self.count += 1;
             }
         }
     }
