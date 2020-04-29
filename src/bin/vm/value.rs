@@ -40,7 +40,7 @@ fn hash(s: &str) -> u32 {
     let mut hash = 2_166_136_261;
     for c in s.chars() {
         hash ^= c as u32;
-        hash = hash.overflowing_mul(16_777_619).0;
+        hash = hash.wrapping_mul(16_777_619);
     }
     hash
 }
