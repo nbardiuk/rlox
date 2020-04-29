@@ -67,7 +67,7 @@ impl Table {
         }
     }
 
-    pub fn get(&self, key: &ObjString) -> Option<Value> {
+    pub fn get(&self, key: &ObjString) -> Option<&Value> {
         if self.count == 0 {
             return None;
         }
@@ -77,7 +77,7 @@ impl Table {
             return None;
         }
 
-        Some(entry.value.clone())
+        Some(&entry.value)
     }
 
     pub fn delete(&mut self, key: &ObjString) -> bool {
@@ -161,17 +161,17 @@ mod spec {
         let mut table = Table::new();
 
         assert_eq!(table.set(key.clone(), V::Number(1.)), true);
-        assert_eq!(table.get(&key), Some(V::Number(1.)));
+        assert_eq!(table.get(&key), Some(&V::Number(1.)));
 
         assert_eq!(table.set(key.clone(), V::Number(2.)), false);
-        assert_eq!(table.get(&key), Some(V::Number(2.)));
+        assert_eq!(table.get(&key), Some(&V::Number(2.)));
 
         assert_eq!(table.delete(&key), true);
         assert_eq!(table.get(&key), None);
         assert_eq!(table.delete(&key), false);
 
         assert_eq!(table.set(key.clone(), V::Number(3.)), true);
-        assert_eq!(table.get(&key), Some(V::Number(3.)));
+        assert_eq!(table.get(&key), Some(&V::Number(3.)));
     }
 
     #[test]
@@ -183,7 +183,7 @@ mod spec {
         }
         for i in 0..1000 {
             let s = ObjString::new(&i.to_string());
-            assert_eq!(table.get(&s), Some(V::Str(s)));
+            assert_eq!(table.get(&s), Some(&V::Str(s)));
         }
 
         for i in 0..1000 {
@@ -201,7 +201,7 @@ mod spec {
         }
         for i in 1000..2000 {
             let s = ObjString::new(&i.to_string());
-            assert_eq!(table.get(&s), Some(V::Str(s)));
+            assert_eq!(table.get(&s), Some(&V::Str(s)));
         }
     }
 
@@ -253,8 +253,8 @@ mod spec {
 
         table.add_all(&other);
 
-        assert_eq!(table.get(&ObjString::new("1")), Some(V::Number(1.)));
-        assert_eq!(table.get(&ObjString::new("2")), Some(V::Number(2.)));
-        assert_eq!(table.get(&ObjString::new("3")), Some(V::Number(2.)));
+        assert_eq!(table.get(&ObjString::new("1")), Some(&V::Number(1.)));
+        assert_eq!(table.get(&ObjString::new("2")), Some(&V::Number(2.)));
+        assert_eq!(table.get(&ObjString::new("3")), Some(&V::Number(2.)));
     }
 }
