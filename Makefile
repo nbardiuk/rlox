@@ -13,3 +13,11 @@ test:
 .PHONY: clean
 clean:
 	cargo clean
+
+.PHONY: vm-repl
+vm-repl:
+	cargo run --bin vm
+
+.PHONY: in-repl
+in-repl:
+	cargo run --bin interpreter

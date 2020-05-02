@@ -35,8 +35,9 @@ impl<'s> Compiler<'s> {
         self.scanner = Scanner::new(source);
 
         self.advance();
-        self.expression();
-        self.consume(T::Eof, "Expected end of expressoin.");
+        while !self.matches(T::Eof) {
+            self.declaration();
+        }
         self.end_compiler();
 
         if self.has_error {
@@ -46,6 +47,34 @@ impl<'s> Compiler<'s> {
             std::mem::swap(&mut self.compiling_chunk, &mut result);
             Some(result)
         }
+    }
+
+    fn declaration(&mut self) {
+        self.statement()
+    }
+
+    fn statement(&mut self) {
+        if self.matches(T::Print) {
+            self.print_statement();
+        }
+    }
+
+    fn print_statement(&mut self) {
+        self.expression();
+        self.consume(T::Semicolon, "Expect ';' after value.");
+        self.emit_code(Op::Print);
+    }
+
+    fn matches(&mut self, t: TokenType) -> bool {
+        if !self.check(t) {
+            return false;
+        };
+        self.advance();
+        true
+    }
+
+    fn check(&self, t: TokenType) -> bool {
+        self.current_type() == Some(t)
     }
 
     fn expression(&mut self) {

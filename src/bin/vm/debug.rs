@@ -74,6 +74,7 @@ impl Chunk {
             Op::Negate => f.push_str("OP_NEGATE"),
             Op::Nil => f.push_str("OP_NIL"),
             Op::Not => f.push_str("OP_NOT"),
+            Op::Print => f.push_str("OP_PRINT"),
             Op::Return => f.push_str("OP_RETURN"),
             Op::Substract => f.push_str("OP_SUBSTRACT"),
             Op::True => f.push_str("OP_TRUE"),

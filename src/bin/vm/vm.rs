@@ -98,10 +98,12 @@ impl Vm {
                         self.stack.push(V::Bool(is_falsey(v)));
                     }
                 }
+                Op::Print => {
+                    if let Some(v) = self.stack.pop() {
+                        println!("{}", v);
+                    }
+                }
                 Op::Return => {
-                    if let Some(constant) = self.stack.pop() {
-                        println!("{}", constant);
-                    };
                     return InterpretOk;
                 }
                 Op::Substract => binary_number!(self, Number, |a, b| a - b),
