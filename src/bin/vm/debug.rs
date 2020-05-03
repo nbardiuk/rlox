@@ -65,6 +65,18 @@ impl Chunk {
                     "OP_CONSTANT", i, self.constants[*i]
                 ));
             }
+            Op::GetGlobal(i) => {
+                f.push_str(&format!(
+                    "{:16} {:04} '{}'",
+                    "OP_GET_GLOBAL", i, self.constants[*i]
+                ));
+            }
+            Op::DefineGlobal(i) => {
+                f.push_str(&format!(
+                    "{:16} {:04} '{}'",
+                    "OP_DEFINE_GLOBAL", i, self.constants[*i]
+                ));
+            }
             Op::Divide => f.push_str("OP_DIVIDE"),
             Op::Equal => f.push_str("OP_EQUAL"),
             Op::False => f.push_str("OP_FALSE"),

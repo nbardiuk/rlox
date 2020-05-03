@@ -3,7 +3,7 @@ use crate::value::Value;
 use std::mem::swap;
 use Value as V;
 
-struct Table {
+pub struct Table {
     count: usize,
     entries: Vec<Entry>,
 }

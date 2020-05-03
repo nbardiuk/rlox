@@ -4,9 +4,11 @@ use crate::value::Value;
 pub enum OpCode {
     Add,
     Constant(usize),
+    DefineGlobal(usize),
     Divide,
     Equal,
     False,
+    GetGlobal(usize),
     Greater,
     Less,
     Multiply,

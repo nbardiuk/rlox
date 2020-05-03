@@ -15,7 +15,7 @@ impl Display for Value {
             Bool(b) => write!(f, "{}", b),
             Nil => write!(f, "nil"),
             Number(n) => write!(f, "{}", n),
-            Str(s) => write!(f, "\"{}\"", s.chars),
+            Str(s) => write!(f, "\"{}\"", s),
         }
     }
 }
@@ -32,6 +32,12 @@ impl ObjString {
             chars: String::from(s),
             hash: hash(s),
         }
+    }
+}
+
+impl Display for ObjString {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
+        write!(f, "{}", self.chars)
     }
 }
 

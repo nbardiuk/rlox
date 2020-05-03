@@ -3,6 +3,7 @@ use crate::chunks::OpCode;
 use crate::chunks::OpCode as Op;
 use crate::compiler::Compiler;
 use crate::out::Out;
+use crate::table::Table;
 use crate::value::Value;
 use Value as V;
 
@@ -12,6 +13,7 @@ pub struct Vm {
     chunk: Chunk,
     ip: usize,
     pub stack: Vec<Value>,
+    globals: Table,
     out: Out,
 }
 
@@ -22,7 +24,7 @@ macro_rules! binary_number {
                 $self.stack.push(V::$t($f(a, b)));
             }
             _ => {
-                $self.runtime_error("Operands must be numbers.");
+                $self.runtime_error(format_args!("Operands must be numbers."));
                 return InterpretRuntimeError;
             }
         }
@@ -36,6 +38,7 @@ impl Vm {
             ip: 0,
             stack: Vec::with_capacity(STACK_MAX), // FIXME this is not really max
             out,
+            globals: Table::new(),
         }
     }
 
@@ -67,12 +70,34 @@ impl Vm {
                         self.stack.push(V::Number(a + b));
                     }
                     _ => {
-                        self.runtime_error("Operands must be two numbers or two strings.");
+                        self.runtime_error(format_args!(
+                            "Operands must be two numbers or two strings."
+                        ));
                         return InterpretRuntimeError;
                     }
                 },
                 Op::Constant(i) => {
                     self.stack.push(self.read_constant(*i));
+                }
+                Op::DefineGlobal(i) => {
+                    if let V::Str(name) = self.read_constant(*i) {
+                        if let Some(value) = self.stack.pop() {
+                            self.globals.set(name, value);
+                        }
+                    }
+                }
+                Op::GetGlobal(i) => {
+                    if let V::Str(name) = self.read_constant(*i) {
+                        match self.globals.get(&name) {
+                            Some(value) => {
+                                self.stack.push(value.clone());
+                            }
+                            None => {
+                                self.runtime_error(format_args!("Undefined variable '{}'.", name));
+                                return InterpretRuntimeError;
+                            }
+                        }
+                    }
                 }
                 Op::Divide => binary_number!(self, Number, |a, b| a / b),
                 Op::Equal => {
@@ -87,7 +112,7 @@ impl Vm {
                     match self.stack.last() {
                         Some(V::Number(_)) => {}
                         _ => {
-                            self.runtime_error("Operand must be a number.");
+                            self.runtime_error(format_args!("Operand must be a number."));
                             return InterpretRuntimeError;
                         }
                     }
@@ -127,10 +152,10 @@ impl Vm {
         &self.chunk.code[self.ip]
     }
 
-    fn runtime_error(&mut self, message: &str) {
+    fn runtime_error(&mut self, args: std::fmt::Arguments) {
         self.out.println(format_args!(
             "[line {}] {}",
-            self.chunk.lines[self.ip], message
+            self.chunk.lines[self.ip], args
         ));
 
         self.stack.clear();
@@ -347,5 +372,58 @@ mod spec {
             "[line 1] Error at end: Expect ';' after value.\n"
         );
         assert_eq!(run("print"), "[line 1] Error at end: Expect expression.\n");
+    }
+
+    #[test]
+    fn global_vars() {
+        assert_eq!(
+            run("var a = 1;
+                var b = 2;
+                print a + b;"),
+            "3\n"
+        );
+        assert_eq!(
+            run("var a;
+                print a;"),
+            "nil\n"
+        );
+        assert_eq!(
+            run("print a;
+                 var a = \"too late!\";"),
+            "[line 1] Undefined variable 'a'.\n"
+        );
+        assert_eq!(
+            run("var a = 1;
+                 print a; // 1.
+                 var a = true;
+                 print a; // true."),
+            "1\n\
+             true\n"
+        );
+        // assert_eq!(run("var a = 1; print a = 2;"), "2\n");
+        // assert_eq!(run("a = 1;"), "[line 1] Undefined variable 'a'.\n");
+        // assert_eq!(
+        //     run("var a;
+        //          var b;
+        //          var c;
+        //          print a;
+        //          print b;
+        //          print c;
+        //          a = b = c = 1;
+        //          print a;
+        //          print b;
+        //          print c;
+        //          "),
+        //     "nil\n\
+        //      nil\n\
+        //      nil\n\
+        //      1\n\
+        //      1\n\
+        //      1\n"
+        // );
+        // assert_eq!(
+        //     run("var a = b = c = 1;"),
+        //     "[line 1] Undefined variable 'c'.\n"
+        // );
     }
 }

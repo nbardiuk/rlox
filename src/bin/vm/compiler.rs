@@ -53,10 +53,47 @@ impl<'s> Compiler<'s> {
     }
 
     fn declaration(&mut self) {
-        self.statement();
+        if self.matches(T::Var) {
+            self.var_declaration();
+        } else {
+            self.statement();
+        }
+
         if self.panic_mode {
             self.synchronize();
         }
+    }
+
+    fn var_declaration(&mut self) {
+        let global = self.parse_variable("Expect variable name.");
+
+        if self.matches(T::Equal) {
+            self.expression();
+        } else {
+            self.emit_code(Op::Nil);
+        }
+
+        self.consume(T::Semicolon, "Expect ';' after variable declaration.");
+
+        self.define_variable(global);
+    }
+
+    fn parse_variable(&mut self, error_message: &str) -> Value {
+        self.consume(T::Identifier, error_message);
+        let name = self.previous.as_ref().map(|n| n.lexeme).unwrap_or_default();
+        V::Str(ObjString::new(name))
+    }
+
+    fn define_variable(&mut self, name: Value) {
+        let i = self.current_chunk().add_constant(name);
+        self.emit_code(Op::DefineGlobal(i))
+    }
+
+    fn variable(&mut self) {
+        let name = self.previous.as_ref().map(|n| n.lexeme).unwrap_or_default();
+        let name = V::Str(ObjString::new(name));
+        let i = self.current_chunk().add_constant(name);
+        self.emit_code(Op::GetGlobal(i))
     }
 
     fn synchronize(&mut self) {
@@ -207,6 +244,7 @@ impl<'s> Compiler<'s> {
             T::Number => self.number(),
             T::False | T::True | T::Nil => self.literal(),
             T::String => self.string(),
+            T::Identifier => self.variable(),
             _ => {
                 self.error(message);
                 return false;
