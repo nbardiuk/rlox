@@ -103,6 +103,9 @@ impl Vm {
                         println!("{}", v);
                     }
                 }
+                Op::Pop => {
+                    self.stack.pop();
+                }
                 Op::Return => {
                     return InterpretOk;
                 }

@@ -14,6 +14,7 @@ pub enum OpCode {
     Nil,
     Not,
     Print,
+    Pop,
     Return,
     Substract,
     True,
