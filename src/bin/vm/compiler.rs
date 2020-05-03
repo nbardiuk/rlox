@@ -144,9 +144,9 @@ impl<'s> Compiler<'s> {
             T::EqualEqual => self.emit_code(Op::Equal),
             T::BangEqual => self.emit_codes(&[Op::Equal, Op::Not]),
             T::Greater => self.emit_code(Op::Greater),
-            T::GreaterEqual => self.emit_codes(&[Op::Greater, Op::Not]),
+            T::GreaterEqual => self.emit_codes(&[Op::Less, Op::Not]),
             T::Less => self.emit_code(Op::Less),
-            T::LessEqual => self.emit_codes(&[Op::Less, Op::Not]),
+            T::LessEqual => self.emit_codes(&[Op::Greater, Op::Not]),
             _ => panic!("Unreachable."),
         }
     }

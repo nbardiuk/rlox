@@ -1,3 +1,4 @@
+use crate::out::Out;
 use crate::vm::InterpretResult::*;
 use crate::vm::Vm;
 use std::env;
@@ -8,6 +9,7 @@ use std::process;
 mod chunks;
 mod compiler;
 mod debug;
+mod out;
 mod scanner;
 mod table;
 mod value;
@@ -33,14 +35,14 @@ fn repl() -> io::Result<()> {
         let mut line = String::new();
         io::stdin().read_line(&mut line)?;
 
-        Vm::new().interpret(&line);
+        Vm::new(Out::std()).interpret(&line);
     }
 }
 
 fn run_file(path: &str) -> io::Result<()> {
     let source = &fs::read_to_string(path)?;
 
-    let result = Vm::new().interpret(source);
+    let result = Vm::new(Out::std()).interpret(source);
 
     match result {
         InterpretCompileError => process::exit(65),

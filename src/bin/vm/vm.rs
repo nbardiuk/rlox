@@ -2,6 +2,7 @@ use crate::chunks::Chunk;
 use crate::chunks::OpCode;
 use crate::chunks::OpCode as Op;
 use crate::compiler::Compiler;
+use crate::out::Out;
 use crate::value::Value;
 use Value as V;
 
@@ -11,6 +12,7 @@ pub struct Vm {
     chunk: Chunk,
     ip: usize,
     pub stack: Vec<Value>,
+    out: Out,
 }
 
 macro_rules! binary_number {
@@ -28,11 +30,12 @@ macro_rules! binary_number {
 }
 
 impl Vm {
-    pub fn new() -> Self {
+    pub fn new(out: Out) -> Self {
         Vm {
             chunk: Chunk::new(),
             ip: 0,
             stack: Vec::with_capacity(STACK_MAX), // FIXME this is not really max
+            out,
         }
     }
 
@@ -100,7 +103,7 @@ impl Vm {
                 }
                 Op::Print => {
                     if let Some(v) = self.stack.pop() {
-                        println!("{}", v);
+                        self.out.println(format_args!("{}", v));
                     }
                 }
                 Op::Pop => {
@@ -124,10 +127,11 @@ impl Vm {
         &self.chunk.code[self.ip]
     }
 
-    // TODO use format args ???
     fn runtime_error(&mut self, message: &str) {
-        eprintln!("{}", message);
-        eprintln!("[line {}] in script", self.chunk.lines[self.ip]);
+        self.out.println(format_args!(
+            "[line {}] {}",
+            self.chunk.lines[self.ip], message
+        ));
 
         self.stack.clear();
     }
@@ -139,9 +143,196 @@ fn is_falsey(v: Value) -> bool {
         _ => false,
     }
 }
+
 use InterpretResult::*;
 pub enum InterpretResult {
     InterpretOk,
     InterpretCompileError,
     InterpretRuntimeError,
+}
+
+#[cfg(test)]
+mod spec {
+    use super::*;
+    use std::cell::RefCell;
+    use std::rc::Rc;
+
+    fn run(source: &str) -> String {
+        let out = Rc::new(RefCell::new(vec![]));
+        let mut vm = Vm::new(Out::new(out.clone()));
+        vm.interpret(source);
+        let v = out.borrow().to_vec();
+        return String::from_utf8(v).unwrap();
+    }
+
+    #[test]
+    fn literal() {
+        assert_eq!(run("print nil;"), "nil\n");
+        assert_eq!(run("print 1;"), "1\n");
+        assert_eq!(run("print \"str\";"), "\"str\"\n");
+        assert_eq!(run("print true;"), "true\n");
+    }
+
+    #[test]
+    fn unary_minus() {
+        assert_eq!(run("print -1;"), "-1\n");
+        assert_eq!(run("print --1;"), "1\n");
+        assert_eq!(run("print -false;"), "[line 1] Operand must be a number.\n");
+        assert_eq!(run("print -\"\";"), "[line 1] Operand must be a number.\n");
+        assert_eq!(run("print -nil;"), "[line 1] Operand must be a number.\n");
+    }
+
+    #[test]
+    fn unary_bang() {
+        assert_eq!(run("print !1;"), "false\n");
+        assert_eq!(run("print !0;"), "false\n");
+        assert_eq!(run("print !true;"), "false\n");
+        assert_eq!(run("print !false;"), "true\n");
+        assert_eq!(run("print !\"\";"), "false\n");
+        assert_eq!(run("print !\"non empty\";"), "false\n");
+        assert_eq!(run("print !nil;"), "true\n");
+        assert_eq!(run("print !!!!1;"), "true\n");
+    }
+
+    #[test]
+    fn binary_minus() {
+        assert_eq!(run("print 2-1;"), "1\n");
+        assert_eq!(run("print 1-2;"), "-1\n");
+        assert_eq!(run("print true-1;"), "[line 1] Operands must be numbers.\n");
+        assert_eq!(run("print nil-1;"), "[line 1] Operands must be numbers.\n");
+        assert_eq!(run("print 1-\"\";"), "[line 1] Operands must be numbers.\n");
+    }
+
+    #[test]
+    fn binary_slash() {
+        assert_eq!(run("print 1/2;"), "0.5\n");
+        assert_eq!(run("print 3/-2;"), "-1.5\n");
+        assert_eq!(run("print true/1;"), "[line 1] Operands must be numbers.\n");
+        assert_eq!(run("print nil/1;"), "[line 1] Operands must be numbers.\n");
+        assert_eq!(run("print 1/\"\";"), "[line 1] Operands must be numbers.\n");
+    }
+
+    #[test]
+    fn binary_star() {
+        assert_eq!(run("print 2*3;"), "6\n");
+        assert_eq!(run("print true*1;"), "[line 1] Operands must be numbers.\n");
+        assert_eq!(run("print nil*1;"), "[line 1] Operands must be numbers.\n");
+        assert_eq!(run("print 1*\"\";"), "[line 1] Operands must be numbers.\n");
+    }
+
+    #[test]
+    fn binary_plus() {
+        assert_eq!(run("print 2+1;"), "3\n");
+        assert_eq!(run("print \"a\"+\"b\";"), "\"ab\"\n");
+        assert_eq!(
+            run("print true+1;"),
+            "[line 1] Operands must be two numbers or two strings.\n"
+        );
+        assert_eq!(
+            run("print nil+1;"),
+            "[line 1] Operands must be two numbers or two strings.\n"
+        );
+        assert_eq!(
+            run("print 1+\"\";"),
+            "[line 1] Operands must be two numbers or two strings.\n"
+        );
+    }
+
+    #[test]
+    fn binary_greater() {
+        assert_eq!(run("print 2>3;"), "false\n");
+        assert_eq!(run("print 2>1;"), "true\n");
+        assert_eq!(run("print 1>1;"), "false\n");
+        assert_eq!(run("print true>1;"), "[line 1] Operands must be numbers.\n");
+        assert_eq!(run("print nil>1;"), "[line 1] Operands must be numbers.\n");
+        assert_eq!(run("print 1>\"\";"), "[line 1] Operands must be numbers.\n");
+    }
+
+    #[test]
+    fn binary_greater_equal() {
+        assert_eq!(run("print 2>=3;"), "false\n");
+        assert_eq!(run("print 2>=1;"), "true\n");
+        assert_eq!(run("print 1>=1;"), "true\n");
+        assert_eq!(
+            run("print true>=1;"),
+            "[line 1] Operands must be numbers.\n"
+        );
+        assert_eq!(run("print nil>=1;"), "[line 1] Operands must be numbers.\n");
+        assert_eq!(
+            run("print 1>=\"\";"),
+            "[line 1] Operands must be numbers.\n"
+        );
+    }
+
+    #[test]
+    fn binary_less() {
+        assert_eq!(run("print 2<3;"), "true\n");
+        assert_eq!(run("print 2<1;"), "false\n");
+        assert_eq!(run("print 1<1;"), "false\n");
+        assert_eq!(run("print true<1;"), "[line 1] Operands must be numbers.\n");
+        assert_eq!(run("print nil<1;"), "[line 1] Operands must be numbers.\n");
+        assert_eq!(run("print 1<\"\";"), "[line 1] Operands must be numbers.\n");
+    }
+
+    #[test]
+    fn binary_less_equal() {
+        assert_eq!(run("print 2<=3;"), "true\n");
+        assert_eq!(run("print 2<=1;"), "false\n");
+        assert_eq!(run("print 1<=1;"), "true\n");
+        assert_eq!(
+            run("print true<=1;"),
+            "[line 1] Operands must be numbers.\n"
+        );
+        assert_eq!(run("print nil<=1;"), "[line 1] Operands must be numbers.\n");
+        assert_eq!(
+            run("print 1<=\"\";"),
+            "[line 1] Operands must be numbers.\n"
+        );
+    }
+
+    #[test]
+    fn binary_equal_equal() {
+        assert_eq!(run("print 1==1;"), "true\n");
+        assert_eq!(run("print 1==2;"), "false\n");
+        assert_eq!(run("print true==true;"), "true\n");
+        assert_eq!(run("print true==false;"), "false\n");
+        assert_eq!(run("print nil==nil;"), "true\n");
+        assert_eq!(run("print \"a\"==\"b\";"), "false\n");
+        assert_eq!(run("print \"a\"==\"a\";"), "true\n");
+        assert_eq!(run("print true==1;"), "false\n");
+        assert_eq!(run("print nil==0;"), "false\n");
+        assert_eq!(run("print nil==false;"), "false\n");
+        assert_eq!(run("print \"true\"==true;"), "false\n");
+        assert_eq!(run("print \"1\"==1;"), "false\n");
+    }
+
+    #[test]
+    fn binary_bang_equal() {
+        assert_eq!(run("print 1!=1;"), "false\n");
+        assert_eq!(run("print 1!=2;"), "true\n");
+        assert_eq!(run("print true!=true;"), "false\n");
+        assert_eq!(run("print true!=false;"), "true\n");
+        assert_eq!(run("print nil!=nil;"), "false\n");
+        assert_eq!(run("print \"a\"!=\"b\";"), "true\n");
+        assert_eq!(run("print \"a\"!=\"a\";"), "false\n");
+        assert_eq!(run("print true!=1;"), "true\n");
+        assert_eq!(run("print nil!=0;"), "true\n");
+        assert_eq!(run("print nil!=false;"), "true\n");
+        assert_eq!(run("print \"true\"!=true;"), "true\n");
+        assert_eq!(run("print \"1\"!=1;"), "true\n");
+    }
+
+    #[test]
+    fn grouping() {
+        assert_eq!(run("print 3*(1+2);"), "9\n");
+        assert_eq!(run("print !(1==2);"), "true\n");
+        assert_eq!(
+            run("print -(1+nil);"),
+            "[line 1] Operands must be two numbers or two strings.\n"
+        );
+        assert_eq!(
+            run("print 2 * (3 / -\"muffin\");"),
+            "[line 1] Operand must be a number.\n"
+        );
+    }
 }

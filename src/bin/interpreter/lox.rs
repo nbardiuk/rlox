@@ -31,9 +31,7 @@ impl Lox {
             out,
         }
     }
-}
 
-impl Lox {
     fn run(&mut self, env: EnvRef, source: &str) {
         let mut scanner = Scanner::new(source);
         let tokens = scanner.scan_tokens(self);

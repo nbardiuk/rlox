@@ -88,11 +88,15 @@ impl Chunk {
 #[cfg(test)]
 mod spec {
     use super::*;
+    use crate::out::Out;
     use crate::value::Value as V;
+    use std::cell::RefCell;
+    use std::rc::Rc;
 
     #[test]
     fn stack() {
-        let mut vm = Vm::new();
+        let out = Out::new(Rc::new(RefCell::new(vec![])));
+        let mut vm = Vm::new(out);
         vm.stack.push(V::Number(1.));
         vm.stack.push(V::Number(2.2));
         vm.stack.push(V::Number(3.1));
