@@ -1,6 +1,7 @@
 use crate::chunks::Chunk;
 use crate::chunks::OpCode as Op;
 use crate::chunks::OpCode;
+use crate::out::Out;
 use crate::scanner::Scanner;
 use crate::scanner::Token;
 use crate::scanner::TokenType;
@@ -17,10 +18,11 @@ pub struct Compiler<'s> {
     has_error: bool,
     panic_mode: bool,
     compiling_chunk: Chunk,
+    out: Out,
 }
 
 impl<'s> Compiler<'s> {
-    pub fn new() -> Self {
+    pub fn new(out: Out) -> Self {
         Self {
             compiling_chunk: Chunk::new(),
             scanner: Scanner::new(""),
@@ -28,6 +30,7 @@ impl<'s> Compiler<'s> {
             current: None,
             has_error: false,
             panic_mode: false,
+            out,
         }
     }
 
@@ -50,7 +53,25 @@ impl<'s> Compiler<'s> {
     }
 
     fn declaration(&mut self) {
-        self.statement()
+        self.statement();
+        if self.panic_mode {
+            self.synchronize();
+        }
+    }
+
+    fn synchronize(&mut self) {
+        self.panic_mode = false;
+        while self.current_type() != Some(T::Eof) {
+            if self.previous_type() == Some(T::Semicolon) {
+                return;
+            }
+            match self.current_type() {
+                Some(T::Class) | Some(T::Fun) | Some(T::Var) | Some(T::For) | Some(T::If)
+                | Some(T::While) | Some(T::Print) | Some(T::Return) => return,
+                _ => {}
+            }
+            self.advance();
+        }
     }
 
     fn statement(&mut self) {
@@ -288,7 +309,10 @@ impl<'s> Compiler<'s> {
             T::Error => "".to_string(),
             _ => format!(" at '{}'", lexeme),
         };
-        println!("[line {}] Error{}: {}", line, position, message);
+        self.out.println(format_args!(
+            "[line {}] Error{}: {}",
+            line, position, message
+        ));
         self.has_error = true;
     }
 }

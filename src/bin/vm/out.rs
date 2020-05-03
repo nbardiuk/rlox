@@ -3,6 +3,7 @@ use std::fmt::Arguments;
 use std::io::{self, Write};
 use std::rc::Rc;
 
+#[derive(Clone)]
 pub struct Out {
     out: Rc<RefCell<dyn Write>>,
 }
@@ -21,7 +22,6 @@ impl Out {
     }
 
     pub fn println(&mut self, args: Arguments) {
-        self.out.borrow_mut().write_fmt(args).unwrap();
-        self.out.borrow_mut().write_fmt(format_args!("\n")).unwrap();
+        self.print(format_args!("{}\n", args));
     }
 }

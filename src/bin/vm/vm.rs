@@ -40,7 +40,7 @@ impl Vm {
     }
 
     pub fn interpret(&mut self, source: &str) -> InterpretResult {
-        if let Some(chunk) = Compiler::new().compile(source) {
+        if let Some(chunk) = Compiler::new(self.out.clone()).compile(source) {
             self.chunk = chunk;
             self.ip = 0;
             self.run()
@@ -334,5 +334,18 @@ mod spec {
             run("print 2 * (3 / -\"muffin\");"),
             "[line 1] Operand must be a number.\n"
         );
+    }
+
+    #[test]
+    fn statement_error() {
+        assert_eq!(
+            run("1"),
+            "[line 1] Error at end: Expect ';' after expression.\n"
+        );
+        assert_eq!(
+            run("print 1"),
+            "[line 1] Error at end: Expect ';' after value.\n"
+        );
+        assert_eq!(run("print"), "[line 1] Error at end: Expect expression.\n");
     }
 }
