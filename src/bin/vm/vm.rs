@@ -113,7 +113,7 @@ impl Vm {
                 }
                 Op::SetGlobal(i) => {
                     if let V::Str(name) = self.read_constant(*i) {
-                        if let Some(value) = self.peek() {
+                        if let Some(value) = self.peek().cloned() {
                             if self.globals.set(name.clone(), value.clone()) {
                                 self.globals.delete(&name);
                                 self.runtime_error(format_args!("Undefined variable '{}'.", name));
@@ -121,6 +121,14 @@ impl Vm {
                             }
                         }
                     }
+                }
+                Op::SetLocal(i) => {
+                    let i = *i;
+                    self.stack[i] = self.peek().unwrap().clone()
+                }
+                Op::GetLocal(i) => {
+                    let i = *i;
+                    self.push(self.stack[i].clone());
                 }
                 Op::Divide => binary_number!(self, Number, |a, b| a / b),
                 Op::Equal => {
@@ -451,6 +459,65 @@ mod spec {
         assert_eq!(
             run("a * b = c + d;"),
             "[line 1] Error at '=': Invalid assignment target.\n"
+        );
+    }
+
+    #[test]
+    fn blocks() {
+        assert_eq!(
+            run("var a = \"global a\";
+                 var b = \"global b\";
+                 var c = \"global c\";
+                 {
+                   var a = \"outer a\";
+                   var b = \"outer b\";
+                   {
+                     var a = \"inner a\";
+                     print a;
+                     print b;
+                     print c;
+                   }
+                   print a;
+                   print b;
+                   print c;
+                 }
+                 print a;
+                 print b;
+                 print c;"),
+            "\"inner a\"\n\
+             \"outer b\"\n\
+             \"global c\"\n\
+             \"outer a\"\n\
+             \"outer b\"\n\
+             \"global c\"\n\
+             \"global a\"\n\
+             \"global b\"\n\
+             \"global c\"\n"
+        );
+        assert_eq!(
+            run("var a = 1;
+                 {
+                   var a = a + 2;
+                   print a;
+                 }"),
+            "[line 3] Error at 'a': Cannot read local variable in its own initializer.\n"
+        );
+        assert_eq!(
+            run("{
+                   var a = 1;
+                 }
+                 {
+                   a = 2;
+                 }"),
+            "[line 5] Undefined variable 'a'.\n"
+        );
+        assert_eq!(
+            run("{
+                   var a = 1;
+                 }
+                 a = 2;
+                 "),
+            "[line 4] Undefined variable 'a'.\n"
         );
     }
 }

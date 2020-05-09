@@ -19,6 +19,8 @@ pub struct Compiler<'s> {
     panic_mode: bool,
     compiling_chunk: Chunk,
     out: Out,
+    locals: Vec<Local<'s>>,
+    scope_depth: usize,
 }
 
 impl<'s> Compiler<'s> {
@@ -31,6 +33,8 @@ impl<'s> Compiler<'s> {
             has_error: false,
             panic_mode: false,
             out,
+            locals: vec![],
+            scope_depth: 0,
         }
     }
 
@@ -78,28 +82,89 @@ impl<'s> Compiler<'s> {
         self.define_variable(global);
     }
 
-    fn parse_variable(&mut self, error_message: &str) -> Value {
+    fn parse_variable(&mut self, error_message: &str) -> usize {
         self.consume(T::Identifier, error_message);
+
+        self.declare_variable();
+        if self.scope_depth > 0 {
+            return 0;
+        }
+
         let name = self.previous.as_ref().map(|n| n.lexeme).unwrap_or_default();
-        V::Str(ObjString::new(name))
+        let name = V::Str(ObjString::new(name));
+        self.current_chunk().add_constant(name)
     }
 
-    fn define_variable(&mut self, name: Value) {
-        let i = self.current_chunk().add_constant(name);
-        self.emit_code(Op::DefineGlobal(i))
+    fn define_variable(&mut self, global: usize) {
+        if self.scope_depth > 0 {
+            self.mark_initialized();
+            return;
+        }
+        self.emit_code(Op::DefineGlobal(global))
+    }
+
+    fn mark_initialized(&mut self) {
+        if let Some(l) = self.locals.last_mut() {
+            l.depth.replace(self.scope_depth);
+        }
+    }
+
+    fn declare_variable(&mut self) {
+        if self.scope_depth == 0 {
+            return;
+        }
+
+        let name = self.previous.as_ref().map(|n| n.lexeme).unwrap_or_default();
+        for i in (0..self.locals.len()).rev() {
+            let local = &self.locals[i];
+            if local.depth.filter(|d| d < &self.scope_depth).is_some() {
+                break;
+            }
+            if name == local.name {
+                self.error("Variable with this name already declared in this scope.");
+                break;
+            }
+        }
+        self.add_local(name);
+    }
+
+    fn add_local(&mut self, name: &'s str) {
+        self.locals.push(Local { name, depth: None });
     }
 
     fn variable(&mut self, can_assign: bool) {
         let name = self.previous.as_ref().map(|n| n.lexeme).unwrap_or_default();
-        let name = V::Str(ObjString::new(name));
-        let i = self.current_chunk().add_constant(name);
+
+        let get_op;
+        let set_op;
+        if let Some(i) = self.resolve_local(&name) {
+            get_op = Op::GetLocal(i);
+            set_op = Op::SetLocal(i);
+        } else {
+            let name = V::Str(ObjString::new(name));
+            let i = self.current_chunk().add_constant(name);
+            get_op = Op::GetGlobal(i);
+            set_op = Op::SetGlobal(i);
+        }
 
         if can_assign && self.matches(T::Equal) {
             self.expression();
-            self.emit_code(Op::SetGlobal(i))
+            self.emit_code(set_op)
         } else {
-            self.emit_code(Op::GetGlobal(i))
+            self.emit_code(get_op)
         }
+    }
+
+    fn resolve_local(&mut self, name: &'s str) -> Option<usize> {
+        for (i, local) in self.locals.iter().enumerate().rev() {
+            if name == local.name {
+                if local.depth.is_none() {
+                    self.error("Cannot read local variable in its own initializer.");
+                }
+                return Some(i);
+            }
+        }
+        None
     }
 
     fn synchronize(&mut self) {
@@ -120,9 +185,36 @@ impl<'s> Compiler<'s> {
     fn statement(&mut self) {
         if self.matches(T::Print) {
             self.print_statement();
+        } else if self.matches(T::LeftBrace) {
+            self.begin_scope();
+            self.block();
+            self.end_scope();
         } else {
             self.expression_statement();
         }
+    }
+
+    fn begin_scope(&mut self) {
+        self.scope_depth += 1;
+    }
+
+    fn end_scope(&mut self) {
+        self.scope_depth -= 1;
+        while let Some(last) = self.locals.last() {
+            if last.depth.unwrap_or(0) > self.scope_depth {
+                self.locals.pop();
+                self.emit_code(Op::Pop);
+            } else {
+                break;
+            }
+        }
+    }
+
+    fn block(&mut self) {
+        while !self.check(T::RightBrace) && !self.check(T::Eof) {
+            self.declaration();
+        }
+        self.consume(T::RightBrace, "Expect '}' after block.");
     }
 
     fn print_statement(&mut self) {
@@ -364,6 +456,11 @@ impl<'s> Compiler<'s> {
         ));
         self.has_error = true;
     }
+}
+
+struct Local<'s> {
+    name: &'s str,
+    depth: Option<usize>,
 }
 
 #[derive(PartialOrd, PartialEq)]

@@ -65,6 +65,7 @@ impl Chunk {
             Op::Equal => f.push_str("OP_EQUAL"),
             Op::False => f.push_str("OP_FALSE"),
             Op::GetGlobal(i) => f.push_str(&self.constant("OP_GET_GLOBAL", *i)),
+            Op::GetLocal(i) => f.push_str(&self.byte("OP_GET_LOCAL", *i)),
             Op::Greater => f.push_str("OP_GREATER"),
             Op::Less => f.push_str("OP_LESS"),
             Op::Multiply => f.push_str("OP_MULTIPLY"),
@@ -75,6 +76,7 @@ impl Chunk {
             Op::Print => f.push_str("OP_PRINT"),
             Op::Return => f.push_str("OP_RETURN"),
             Op::SetGlobal(i) => f.push_str(&self.constant("OP_SET_GLOBAL", *i)),
+            Op::SetLocal(i) => f.push_str(&self.byte("OP_SET_LOCAL", *i)),
             Op::Substract => f.push_str("OP_SUBSTRACT"),
             Op::True => f.push_str("OP_TRUE"),
         };
@@ -84,6 +86,10 @@ impl Chunk {
 
     fn constant(&self, name: &str, i: usize) -> String {
         format!("{:16} {:04} '{}'", name, i, self.constants[i])
+    }
+
+    fn byte(&self, name: &str, i: usize) -> String {
+        format!("{:16} {:04}", name, i)
     }
 }
 

@@ -9,6 +9,7 @@ pub enum OpCode {
     Equal,
     False,
     GetGlobal(usize),
+    GetLocal(usize),
     Greater,
     Less,
     Multiply,
@@ -19,6 +20,7 @@ pub enum OpCode {
     Print,
     Return,
     SetGlobal(usize),
+    SetLocal(usize),
     Substract,
     True,
 }
