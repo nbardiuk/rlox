@@ -59,47 +59,31 @@ impl Chunk {
         // Instruction
         match instruction {
             Op::Add => f.push_str("OP_ADD"),
-            Op::Constant(i) => {
-                f.push_str(&format!(
-                    "{:16} {:04} '{}'",
-                    "OP_CONSTANT", i, self.constants[*i]
-                ));
-            }
-            Op::SetGlobal(i) => {
-                f.push_str(&format!(
-                    "{:16} {:04} '{}'",
-                    "OP_SET_GLOBAL", i, self.constants[*i]
-                ));
-            }
-            Op::GetGlobal(i) => {
-                f.push_str(&format!(
-                    "{:16} {:04} '{}'",
-                    "OP_GET_GLOBAL", i, self.constants[*i]
-                ));
-            }
-            Op::DefineGlobal(i) => {
-                f.push_str(&format!(
-                    "{:16} {:04} '{}'",
-                    "OP_DEFINE_GLOBAL", i, self.constants[*i]
-                ));
-            }
+            Op::Constant(i) => f.push_str(&self.constant("OP_CONSTANT", *i)),
+            Op::DefineGlobal(i) => f.push_str(&self.constant("OP_DEFINE_GLOBAL", *i)),
             Op::Divide => f.push_str("OP_DIVIDE"),
             Op::Equal => f.push_str("OP_EQUAL"),
             Op::False => f.push_str("OP_FALSE"),
+            Op::GetGlobal(i) => f.push_str(&self.constant("OP_GET_GLOBAL", *i)),
             Op::Greater => f.push_str("OP_GREATER"),
             Op::Less => f.push_str("OP_LESS"),
             Op::Multiply => f.push_str("OP_MULTIPLY"),
             Op::Negate => f.push_str("OP_NEGATE"),
             Op::Nil => f.push_str("OP_NIL"),
             Op::Not => f.push_str("OP_NOT"),
-            Op::Print => f.push_str("OP_PRINT"),
             Op::Pop => f.push_str("OP_POP"),
+            Op::Print => f.push_str("OP_PRINT"),
             Op::Return => f.push_str("OP_RETURN"),
+            Op::SetGlobal(i) => f.push_str(&self.constant("OP_SET_GLOBAL", *i)),
             Op::Substract => f.push_str("OP_SUBSTRACT"),
             Op::True => f.push_str("OP_TRUE"),
         };
         f.push('\n');
         f
+    }
+
+    fn constant(&self, name: &str, i: usize) -> String {
+        format!("{:16} {:04} '{}'", name, i, self.constants[i])
     }
 }
 
