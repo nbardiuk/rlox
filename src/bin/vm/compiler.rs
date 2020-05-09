@@ -89,11 +89,17 @@ impl<'s> Compiler<'s> {
         self.emit_code(Op::DefineGlobal(i))
     }
 
-    fn variable(&mut self) {
+    fn variable(&mut self, can_assign: bool) {
         let name = self.previous.as_ref().map(|n| n.lexeme).unwrap_or_default();
         let name = V::Str(ObjString::new(name));
         let i = self.current_chunk().add_constant(name);
-        self.emit_code(Op::GetGlobal(i))
+
+        if can_assign && self.matches(T::Equal) {
+            self.expression();
+            self.emit_code(Op::SetGlobal(i))
+        } else {
+            self.emit_code(Op::GetGlobal(i))
+        }
     }
 
     fn synchronize(&mut self) {
@@ -147,7 +153,7 @@ impl<'s> Compiler<'s> {
         self.parse_precedence(Prec::Assignment);
     }
 
-    fn number(&mut self) {
+    fn number(&mut self, can_assign: bool) {
         let value = self
             .previous
             .as_ref()
@@ -158,7 +164,7 @@ impl<'s> Compiler<'s> {
         self.emit_constant(V::Number(value));
     }
 
-    fn literal(&mut self) {
+    fn literal(&mut self, can_assign: bool) {
         match self.previous_type() {
             Some(T::False) => self.emit_code(Op::False),
             Some(T::Nil) => self.emit_code(Op::Nil),
@@ -167,12 +173,12 @@ impl<'s> Compiler<'s> {
         }
     }
 
-    fn grouping(&mut self) {
+    fn grouping(&mut self, can_assign: bool) {
         self.expression();
         self.consume(T::RightParen, "Expect ')' after expression.");
     }
 
-    fn unary(&mut self) {
+    fn unary(&mut self, can_assign: bool) {
         let operator_type = self.previous_type().unwrap_or(T::Error);
 
         // compile the operand
@@ -186,7 +192,7 @@ impl<'s> Compiler<'s> {
         }
     }
 
-    fn binary(&mut self) {
+    fn binary(&mut self, can_assign: bool) {
         let operator_type = self.previous_type().unwrap_or(T::Error);
 
         // right operand
@@ -212,19 +218,24 @@ impl<'s> Compiler<'s> {
     fn parse_precedence(&mut self, precedence: Precedence) {
         self.advance();
 
+        let can_assign = precedence <= Precedence::Assignment;
         let operator_type = self.previous_type().unwrap_or(T::Error);
-        let ok = self.prefix(operator_type, "Expect expression.");
+        let ok = self.prefix(operator_type, can_assign, "Expect expression.");
         if !ok {
             return;
         }
 
         while precedence <= Precedence::for_type(self.current_type().unwrap_or(T::Error)) {
             self.advance();
-            self.infix(self.previous_type().unwrap_or(T::Error));
+            self.infix(self.previous_type().unwrap_or(T::Error), can_assign);
+        }
+
+        if can_assign && self.matches(T::Equal) {
+            self.error("Invalid assignment target.");
         }
     }
 
-    fn string(&mut self) {
+    fn string(&mut self, can_assign: bool) {
         let lexeme = self.previous.as_ref().map(|t| t.lexeme).unwrap_or_default();
         self.emit_constant(V::Str(ObjString::new(&lexeme[1..lexeme.len() - 1])));
     }
@@ -237,14 +248,14 @@ impl<'s> Compiler<'s> {
         self.current.as_ref().map(|t| t.typ)
     }
 
-    fn prefix(&mut self, t: TokenType, message: &str) -> bool {
+    fn prefix(&mut self, t: TokenType, can_assign: bool, message: &str) -> bool {
         match t {
-            T::LeftParen => self.grouping(),
-            T::Minus | T::Bang => self.unary(),
-            T::Number => self.number(),
-            T::False | T::True | T::Nil => self.literal(),
-            T::String => self.string(),
-            T::Identifier => self.variable(),
+            T::LeftParen => self.grouping(can_assign),
+            T::Minus | T::Bang => self.unary(can_assign),
+            T::Number => self.number(can_assign),
+            T::False | T::True | T::Nil => self.literal(can_assign),
+            T::String => self.string(can_assign),
+            T::Identifier => self.variable(can_assign),
             _ => {
                 self.error(message);
                 return false;
@@ -253,7 +264,7 @@ impl<'s> Compiler<'s> {
         true
     }
 
-    fn infix(&mut self, t: TokenType) {
+    fn infix(&mut self, t: TokenType, can_assign: bool) {
         match t {
             T::BangEqual
             | T::EqualEqual
@@ -264,7 +275,7 @@ impl<'s> Compiler<'s> {
             | T::Minus
             | T::Plus
             | T::Slash
-            | T::Star => self.binary(),
+            | T::Star => self.binary(can_assign),
             _ => {}
         }
     }

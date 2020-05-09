@@ -15,9 +15,10 @@ pub enum OpCode {
     Negate,
     Nil,
     Not,
-    Print,
     Pop,
+    Print,
     Return,
+    SetGlobal(usize),
     Substract,
     True,
 }

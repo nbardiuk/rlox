@@ -19,9 +19,9 @@ pub struct Vm {
 
 macro_rules! binary_number {
     ($self:ident, $t:ident, $f:expr) => {{
-        match ($self.stack.pop(), $self.stack.pop()) {
+        match ($self.pop(), $self.pop()) {
             (Some(V::Number(b)), Some(V::Number(a))) => {
-                $self.stack.push(V::$t($f(a, b)));
+                $self.push(V::$t($f(a, b)));
             }
             _ => {
                 $self.runtime_error(format_args!("Operands must be numbers."));
@@ -52,6 +52,18 @@ impl Vm {
         }
     }
 
+    fn peek(&self) -> Option<&Value> {
+        self.stack.last()
+    }
+
+    fn pop(&mut self) -> Option<Value> {
+        self.stack.pop()
+    }
+
+    fn push(&mut self, value: Value) {
+        self.stack.push(value)
+    }
+
     fn run(&mut self) -> InterpretResult {
         loop {
             #[cfg(feature = "debug-trace")]
@@ -62,12 +74,12 @@ impl Vm {
 
             let instruction = self.read_byte();
             match instruction {
-                Op::Add => match (self.stack.pop(), self.stack.pop()) {
+                Op::Add => match (self.pop(), self.pop()) {
                     (Some(V::Str(b)), Some(V::Str(a))) => {
-                        self.stack.push(V::Str(a + b));
+                        self.push(V::Str(a + b));
                     }
                     (Some(V::Number(b)), Some(V::Number(a))) => {
-                        self.stack.push(V::Number(a + b));
+                        self.push(V::Number(a + b));
                     }
                     _ => {
                         self.runtime_error(format_args!(
@@ -77,11 +89,11 @@ impl Vm {
                     }
                 },
                 Op::Constant(i) => {
-                    self.stack.push(self.read_constant(*i));
+                    self.push(self.read_constant(*i));
                 }
                 Op::DefineGlobal(i) => {
                     if let V::Str(name) = self.read_constant(*i) {
-                        if let Some(value) = self.stack.pop() {
+                        if let Some(value) = self.pop() {
                             self.globals.set(name, value);
                         }
                     }
@@ -90,7 +102,7 @@ impl Vm {
                     if let V::Str(name) = self.read_constant(*i) {
                         match self.globals.get(&name) {
                             Some(value) => {
-                                self.stack.push(value.clone());
+                                self.push(value.clone());
                             }
                             None => {
                                 self.runtime_error(format_args!("Undefined variable '{}'.", name));
@@ -99,46 +111,57 @@ impl Vm {
                         }
                     }
                 }
+                Op::SetGlobal(i) => {
+                    if let V::Str(name) = self.read_constant(*i) {
+                        if let Some(value) = self.peek() {
+                            if self.globals.set(name.clone(), value.clone()) {
+                                self.globals.delete(&name);
+                                self.runtime_error(format_args!("Undefined variable '{}'.", name));
+                                return InterpretRuntimeError;
+                            }
+                        }
+                    }
+                }
                 Op::Divide => binary_number!(self, Number, |a, b| a / b),
                 Op::Equal => {
-                    let (b, a) = (self.stack.pop(), self.stack.pop());
-                    self.stack.push(V::Bool(a == b));
+                    let (b, a) = (self.pop(), self.pop());
+                    self.push(V::Bool(a == b));
                 }
-                Op::False => self.stack.push(V::Bool(false)),
+                Op::False => self.push(V::Bool(false)),
                 Op::Greater => binary_number!(self, Bool, |a, b| a > b),
                 Op::Less => binary_number!(self, Bool, |a, b| a < b),
                 Op::Multiply => binary_number!(self, Number, |a, b| a * b),
                 Op::Negate => {
-                    match self.stack.last() {
+                    match self.peek() {
                         Some(V::Number(_)) => {}
                         _ => {
                             self.runtime_error(format_args!("Operand must be a number."));
                             return InterpretRuntimeError;
                         }
                     }
-                    if let Some(V::Number(constant)) = self.stack.pop() {
-                        self.stack.push(V::Number(-constant));
+                    if let Some(V::Number(constant)) = self.pop() {
+                        self.push(V::Number(-constant));
                     }
                 }
-                Op::Nil => self.stack.push(V::Nil),
+                Op::Nil => self.push(V::Nil),
                 Op::Not => {
-                    if let Some(v) = self.stack.pop() {
-                        self.stack.push(V::Bool(is_falsey(v)));
+                    if let Some(v) = self.pop() {
+                        self.push(V::Bool(is_falsey(v)));
                     }
                 }
                 Op::Print => {
-                    if let Some(v) = self.stack.pop() {
+                    if let Some(v) = self.pop() {
                         self.out.println(format_args!("{}", v));
                     }
                 }
                 Op::Pop => {
-                    self.stack.pop();
+                    self.pop();
                 }
                 Op::Return => {
                     return InterpretOk;
                 }
                 Op::Substract => binary_number!(self, Number, |a, b| a - b),
-                Op::True => self.stack.push(V::Bool(true)),
+                Op::True => self.push(V::Bool(true)),
             }
             self.ip += 1;
         }
@@ -400,30 +423,34 @@ mod spec {
             "1\n\
              true\n"
         );
-        // assert_eq!(run("var a = 1; print a = 2;"), "2\n");
-        // assert_eq!(run("a = 1;"), "[line 1] Undefined variable 'a'.\n");
-        // assert_eq!(
-        //     run("var a;
-        //          var b;
-        //          var c;
-        //          print a;
-        //          print b;
-        //          print c;
-        //          a = b = c = 1;
-        //          print a;
-        //          print b;
-        //          print c;
-        //          "),
-        //     "nil\n\
-        //      nil\n\
-        //      nil\n\
-        //      1\n\
-        //      1\n\
-        //      1\n"
-        // );
-        // assert_eq!(
-        //     run("var a = b = c = 1;"),
-        //     "[line 1] Undefined variable 'c'.\n"
-        // );
+        assert_eq!(run("var a = 1; print a = 2;"), "2\n");
+        assert_eq!(run("a = 1;"), "[line 1] Undefined variable 'a'.\n");
+        assert_eq!(
+            run("var a;
+                 var b;
+                 var c;
+                 print a;
+                 print b;
+                 print c;
+                 a = b = c = 1;
+                 print a;
+                 print b;
+                 print c;
+                 "),
+            "nil\n\
+             nil\n\
+             nil\n\
+             1\n\
+             1\n\
+             1\n"
+        );
+        assert_eq!(
+            run("var a = b = c = 1;"),
+            "[line 1] Undefined variable 'c'.\n"
+        );
+        assert_eq!(
+            run("a * b = c + d;"),
+            "[line 1] Error at '=': Invalid assignment target.\n"
+        );
     }
 }

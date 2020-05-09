@@ -65,6 +65,12 @@ impl Chunk {
                     "OP_CONSTANT", i, self.constants[*i]
                 ));
             }
+            Op::SetGlobal(i) => {
+                f.push_str(&format!(
+                    "{:16} {:04} '{}'",
+                    "OP_SET_GLOBAL", i, self.constants[*i]
+                ));
+            }
             Op::GetGlobal(i) => {
                 f.push_str(&format!(
                     "{:16} {:04} '{}'",
