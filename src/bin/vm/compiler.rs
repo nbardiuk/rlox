@@ -185,12 +185,47 @@ impl<'s> Compiler<'s> {
     fn statement(&mut self) {
         if self.matches(T::Print) {
             self.print_statement();
+        } else if self.matches(T::If) {
+            self.if_statement();
         } else if self.matches(T::LeftBrace) {
             self.begin_scope();
             self.block();
             self.end_scope();
         } else {
             self.expression_statement();
+        }
+    }
+
+    fn if_statement(&mut self) {
+        self.consume(T::LeftParen, "Expect '(' after 'if'.");
+        self.expression();
+        self.consume(T::RightParen, "Expect ')' after 'if'.");
+
+        let then_jump = self.emit_jump(Op::JumpIfFalse(0));
+        self.emit_code(Op::Pop);
+        self.statement();
+
+        let else_jump = self.emit_jump(Op::Jump(0));
+
+        self.patch_jump(then_jump);
+        self.emit_code(Op::Pop);
+
+        if self.matches(T::Else) {
+            self.statement();
+        }
+        self.patch_jump(else_jump);
+    }
+
+    fn emit_jump(&mut self, op: OpCode) -> usize {
+        self.emit_code(op);
+        self.current_chunk().code.len() - 1
+    }
+
+    fn patch_jump(&mut self, offset: usize) {
+        let jump = self.current_chunk().code.len() - offset - 1;
+        match self.current_chunk().code.get_mut(offset) {
+            Some(Op::Jump(j)) | Some(Op::JumpIfFalse(j)) => *j = jump,
+            o => todo!("{:?}", o),
         }
     }
 

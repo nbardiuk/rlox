@@ -155,7 +155,7 @@ impl Vm {
                 Op::Nil => self.push(V::Nil),
                 Op::Not => {
                     if let Some(v) = self.pop() {
-                        self.push(V::Bool(is_falsey(v)));
+                        self.push(V::Bool(is_falsey(&v)));
                     }
                 }
                 Op::Print => {
@@ -171,6 +171,16 @@ impl Vm {
                 }
                 Op::Substract => binary_number!(self, Number, |a, b| a - b),
                 Op::True => self.push(V::Bool(true)),
+                Op::JumpIfFalse(offset) => {
+                    if let Some(v) = self.peek() {
+                        if is_falsey(v) {
+                            self.ip += *offset;
+                        }
+                    }
+                }
+                Op::Jump(offset) => {
+                    self.ip += *offset;
+                }
             }
             self.ip += 1;
         }
@@ -194,7 +204,7 @@ impl Vm {
     }
 }
 
-fn is_falsey(v: Value) -> bool {
+fn is_falsey(v: &Value) -> bool {
     match v {
         V::Bool(false) | V::Nil => true,
         _ => false,
@@ -519,6 +529,24 @@ mod spec {
                  a = 2;
                  "),
             "[line 4] Undefined variable 'a'.\n"
+        );
+    }
+
+    #[test]
+    fn ifs() {
+        assert_eq!(
+            run("var t = true;
+                 var f = false;
+                 if (t) print t; else print f;
+                 if (f) print t; else print f;"),
+            "true\n\
+             false\n"
+        );
+        assert_eq!(
+            run("if (true) print 1; else fail;
+                 if (false) fail; else print 2;"),
+            "1\n\
+             2\n"
         );
     }
 }

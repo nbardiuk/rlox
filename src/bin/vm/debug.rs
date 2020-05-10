@@ -68,6 +68,8 @@ impl Chunk {
             Op::GetGlobal(i) => f.push_str(&self.constant("OP_GET_GLOBAL", *i)),
             Op::GetLocal(i) => f.push_str(&self.byte("OP_GET_LOCAL", *i)),
             Op::Greater => f.push_str("OP_GREATER"),
+            Op::Jump(j) => f.push_str(&self.jump("OP_JUMP", *j, offset)),
+            Op::JumpIfFalse(j) => f.push_str(&self.jump("OP_JUMP_IF_FALSE", *j, offset)),
             Op::Less => f.push_str("OP_LESS"),
             Op::Multiply => f.push_str("OP_MULTIPLY"),
             Op::Negate => f.push_str("OP_NEGATE"),
@@ -91,6 +93,10 @@ impl Chunk {
 
     fn byte(&self, name: &str, i: usize) -> String {
         format!("{:16} {:04}", name, i)
+    }
+
+    fn jump(&self, name: &str, j: usize, offset: usize) -> String {
+        format!("{:16} {:04} -> {:04}", name, offset, offset + j)
     }
 }
 
