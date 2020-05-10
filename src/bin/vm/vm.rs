@@ -549,4 +549,24 @@ mod spec {
              2\n"
         );
     }
+
+    #[test]
+    fn logical() {
+        assert_eq!(
+            run("print 1 or 2 or FAIL;
+                 print 1 and 2;
+                 print 1 and false and FAIL;"),
+            "1\n\
+             2\n\
+             false\n"
+        );
+        assert_eq!(
+            run("print nil or FAIL;"),
+            "[line 1] Undefined variable 'FAIL'.\n"
+        );
+        assert_eq!(
+            run("print 1 and FAIL;"),
+            "[line 1] Undefined variable 'FAIL'.\n"
+        );
+    }
 }

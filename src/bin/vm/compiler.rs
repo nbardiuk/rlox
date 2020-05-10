@@ -393,6 +393,8 @@ impl<'s> Compiler<'s> {
 
     fn infix(&mut self, t: TokenType, can_assign: bool) {
         match t {
+            T::And => self.and(can_assign),
+            T::Or => self.or(can_assign),
             T::BangEqual
             | T::EqualEqual
             | T::Greater
@@ -405,6 +407,25 @@ impl<'s> Compiler<'s> {
             | T::Star => self.binary(can_assign),
             _ => {}
         }
+    }
+
+    fn or(&mut self, _can_assign: bool) {
+        let else_jump = self.emit_jump(Op::JumpIfFalse(0));
+        let end_jump = self.emit_jump(Op::Jump(0));
+
+        self.patch_jump(else_jump);
+        self.emit_code(Op::Pop);
+
+        self.parse_precedence(Prec::Or);
+        self.patch_jump(end_jump);
+    }
+
+    fn and(&mut self, _can_assign: bool) {
+        let end_jump = self.emit_jump(Op::JumpIfFalse(0));
+        self.emit_code(Op::Pop);
+
+        self.parse_precedence(Prec::And);
+        self.patch_jump(end_jump);
     }
 
     fn advance(&mut self) {
@@ -540,6 +561,8 @@ impl Precedence {
     fn for_type(t: TokenType) -> Precedence {
         use Precedence as P;
         match t {
+            T::And => P::And,
+            T::Or => P::Or,
             T::Minus | T::Plus => P::Term,
             T::Slash | T::Star => P::Factor,
             T::BangEqual | T::EqualEqual => P::Equality,
