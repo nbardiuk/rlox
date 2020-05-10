@@ -89,7 +89,8 @@ impl Vm {
                     }
                 },
                 Op::Constant(i) => {
-                    self.push(self.read_constant(*i));
+                    let i = *i;
+                    self.push(self.read_constant(i));
                 }
                 Op::DefineGlobal(i) => {
                     if let V::Str(name) = self.read_constant(*i) {
@@ -100,9 +101,9 @@ impl Vm {
                 }
                 Op::GetGlobal(i) => {
                     if let V::Str(name) = self.read_constant(*i) {
-                        match self.globals.get(&name) {
+                        match self.globals.get(&name).cloned() {
                             Some(value) => {
-                                self.push(value.clone());
+                                self.push(value);
                             }
                             None => {
                                 self.runtime_error(format_args!("Undefined variable '{}'.", name));
@@ -218,7 +219,7 @@ mod spec {
         let mut vm = Vm::new(Out::new(out.clone()));
         vm.interpret(source);
         let v = out.borrow().to_vec();
-        return String::from_utf8(v).unwrap();
+        String::from_utf8(v).unwrap()
     }
 
     #[test]

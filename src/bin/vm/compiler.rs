@@ -245,7 +245,7 @@ impl<'s> Compiler<'s> {
         self.parse_precedence(Prec::Assignment);
     }
 
-    fn number(&mut self, can_assign: bool) {
+    fn number(&mut self, _can_assign: bool) {
         let value = self
             .previous
             .as_ref()
@@ -256,7 +256,7 @@ impl<'s> Compiler<'s> {
         self.emit_constant(V::Number(value));
     }
 
-    fn literal(&mut self, can_assign: bool) {
+    fn literal(&mut self, _can_assign: bool) {
         match self.previous_type() {
             Some(T::False) => self.emit_code(Op::False),
             Some(T::Nil) => self.emit_code(Op::Nil),
@@ -265,12 +265,12 @@ impl<'s> Compiler<'s> {
         }
     }
 
-    fn grouping(&mut self, can_assign: bool) {
+    fn grouping(&mut self, _can_assign: bool) {
         self.expression();
         self.consume(T::RightParen, "Expect ')' after expression.");
     }
 
-    fn unary(&mut self, can_assign: bool) {
+    fn unary(&mut self, _can_assign: bool) {
         let operator_type = self.previous_type().unwrap_or(T::Error);
 
         // compile the operand
@@ -284,7 +284,7 @@ impl<'s> Compiler<'s> {
         }
     }
 
-    fn binary(&mut self, can_assign: bool) {
+    fn binary(&mut self, _can_assign: bool) {
         let operator_type = self.previous_type().unwrap_or(T::Error);
 
         // right operand
@@ -327,7 +327,7 @@ impl<'s> Compiler<'s> {
         }
     }
 
-    fn string(&mut self, can_assign: bool) {
+    fn string(&mut self, _can_assign: bool) {
         let lexeme = self.previous.as_ref().map(|t| t.lexeme).unwrap_or_default();
         self.emit_constant(V::Str(ObjString::new(&lexeme[1..lexeme.len() - 1])));
     }
@@ -430,13 +430,19 @@ impl<'s> Compiler<'s> {
 
     fn error(&mut self, message: &str) {
         if let Some(token) = self.previous.as_ref() {
-            self.error_at(token.typ, token.lexeme, token.line, message);
+            let typ = token.typ;
+            let lexeme = token.lexeme;
+            let line = token.line;
+            self.error_at(typ, lexeme, line, message);
         }
     }
 
     fn error_at_current(&mut self, message: &str) {
         if let Some(token) = self.current.as_ref() {
-            self.error_at(token.typ, token.lexeme, token.line, message);
+            let typ = token.typ;
+            let lexeme = token.lexeme;
+            let line = token.line;
+            self.error_at(typ, lexeme, line, message);
         }
     }
 

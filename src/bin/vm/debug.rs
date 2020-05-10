@@ -15,6 +15,7 @@ impl Vm {
 }
 
 impl Chunk {
+    #[allow(dead_code)]
     pub fn disasemble_instruction(&self, offset: usize) -> String {
         let instruction = &self.code[offset];
         let line = self.lines[offset];
