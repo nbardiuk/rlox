@@ -189,6 +189,8 @@ impl<'s> Compiler<'s> {
             self.if_statement();
         } else if self.matches(T::While) {
             self.while_statement();
+        } else if self.matches(T::For) {
+            self.for_statement();
         } else if self.matches(T::LeftBrace) {
             self.begin_scope();
             self.block();
@@ -196,6 +198,51 @@ impl<'s> Compiler<'s> {
         } else {
             self.expression_statement();
         }
+    }
+
+    fn for_statement(&mut self) {
+        self.begin_scope();
+        self.consume(T::LeftParen, "Expect '(' after 'for'.");
+        if self.matches(T::Semicolon) {
+            //
+        } else if self.matches(T::Var) {
+            self.var_declaration();
+        } else {
+            self.expression_statement();
+        }
+
+        let mut loop_start = self.current_chunk().code.len();
+
+        let mut exit_jump = None;
+        if !self.matches(T::Semicolon) {
+            self.expression();
+            self.consume(T::Semicolon, "Expect ';'.");
+
+            exit_jump = Some(self.emit_jump(Op::JumpIfFalse(0)));
+            self.emit_code(Op::Pop);
+        }
+
+        if !self.matches(T::RightParen) {
+            let body_jump = self.emit_jump(Op::Jump(0));
+
+            let increment_start = self.current_chunk().code.len();
+            self.expression();
+            self.emit_code(Op::Pop);
+            self.consume(T::RightParen, "Expect ')' after for clauses.");
+
+            self.emit_loop(loop_start);
+            loop_start = increment_start;
+            self.patch_jump(body_jump);
+        }
+
+        self.statement();
+
+        self.emit_loop(loop_start);
+        if let Some(j) = exit_jump {
+            self.patch_jump(j);
+            self.emit_code(Op::Pop);
+        }
+        self.end_scope();
     }
 
     fn while_statement(&mut self) {
