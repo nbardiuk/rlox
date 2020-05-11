@@ -14,6 +14,7 @@ pub enum OpCode {
     Jump(usize),
     JumpIfFalse(usize),
     Less,
+    Loop(usize),
     Multiply,
     Negate,
     Nil,

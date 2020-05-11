@@ -187,6 +187,8 @@ impl<'s> Compiler<'s> {
             self.print_statement();
         } else if self.matches(T::If) {
             self.if_statement();
+        } else if self.matches(T::While) {
+            self.while_statement();
         } else if self.matches(T::LeftBrace) {
             self.begin_scope();
             self.block();
@@ -194,6 +196,23 @@ impl<'s> Compiler<'s> {
         } else {
             self.expression_statement();
         }
+    }
+
+    fn while_statement(&mut self) {
+        let loop_start = self.current_chunk().code.len();
+
+        self.consume(T::LeftParen, "Expect '(' after 'while'.");
+        self.expression();
+        self.consume(T::RightParen, "Expect ')' after condition.");
+
+        let exit_jump = self.emit_jump(Op::JumpIfFalse(0));
+
+        self.emit_code(Op::Pop);
+        self.statement();
+        self.emit_loop(loop_start);
+
+        self.patch_jump(exit_jump);
+        self.emit_code(Op::Pop);
     }
 
     fn if_statement(&mut self) {
@@ -214,6 +233,11 @@ impl<'s> Compiler<'s> {
             self.statement();
         }
         self.patch_jump(else_jump);
+    }
+
+    fn emit_loop(&mut self, loop_start: usize) {
+        let offset = self.current_chunk().code.len() - loop_start + 1;
+        self.emit_code(Op::Loop(offset));
     }
 
     fn emit_jump(&mut self, op: OpCode) -> usize {
